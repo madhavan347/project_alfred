@@ -1,0 +1,1 @@
+"""State adapter tests."""
