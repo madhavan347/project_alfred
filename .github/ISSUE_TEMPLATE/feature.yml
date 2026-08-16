@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose one focused Alfred workflow improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow problem should Alfred solve?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior, not only an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and safety
+      description: Note config, migration, Git, process, privacy, or macOS impact.
+  - type: textarea
+    id: slices
+    attributes:
+      label: Suggested incremental slices
+      description: If known, list small independently testable changes.
