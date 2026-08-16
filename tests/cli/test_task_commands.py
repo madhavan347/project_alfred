@@ -63,6 +63,68 @@ class TaskCommandTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("builder", output)
 
+    def test_review_deploy_and_archive_lifecycle(self) -> None:
+        self.call(
+            "task",
+            "create",
+            "--task",
+            "7",
+            "--title",
+            "Lifecycle",
+            "--description",
+            "Exercise lifecycle commands",
+            "--worktree",
+            "disabled",
+        )
+        commands = (
+            ("start",),
+            ("block", "--reason", "Waiting"),
+            ("unblock", "--note", "Ready"),
+            ("start",),
+            ("review", "--decision", "approved", "--note", "Reviewed"),
+            ("merge", "--mr", "42"),
+            ("deploy", "--env", "staging", "--result", "passed"),
+            ("archive", "--note", "Retained"),
+        )
+        for command in commands:
+            with self.subTest(action=command[0]):
+                self.assertEqual(self.call("task", *command, "--task", "7")[0], 0)
+
+    def test_update_modes_and_consolidate(self) -> None:
+        self.call(
+            "task",
+            "create",
+            "--task",
+            "8",
+            "--title",
+            "Child",
+            "--description",
+            "Consolidate this task",
+            "--worktree",
+            "disabled",
+        )
+        code, _ = self.call(
+            "task",
+            "update",
+            "--task",
+            "8",
+            "--mode",
+            "plan-execution",
+            "--worktree",
+            "enabled",
+            "--branch",
+            "feature/child",
+            "--repos",
+            "app,docs",
+            "--dependencies",
+            "1,2",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            self.call("task", "consolidate", "--task", "8", "--note", "Parent 1")[0],
+            0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

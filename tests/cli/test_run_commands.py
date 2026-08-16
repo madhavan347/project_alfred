@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from alfred.adapters.git.commits import CommitResult, PushResult
 from alfred.adapters.git.worktrees import WorktreeStatus
 from alfred.cli.run_commands import handle_run, handle_worktree
-from alfred.domain.constants import RunStatus, TaskStatus
-from alfred.domain.models import AgentRun, Task
+from alfred.domain.constants import CompletionStatus, RunStatus, TaskStatus
+from alfred.domain.models import AgentRun, CompletionReport, Task
 
 
 class FakeRuns:
@@ -23,6 +23,33 @@ class FakeRuns:
 
     def list(self):
         return (self.run,)
+
+    def stop(self, task_number, reason, *, cleanup, force):
+        self.run.run_status = RunStatus.STOPPED
+        return self.run
+
+    def continue_execution(self, task_number, note, *, actor):
+        return self.run
+
+    def active(self, task_number):
+        return self.run
+
+    def session_names(self):
+        return (self.run.session_name,) if self.run.session_name else ()
+
+    def record_event(self, task_number, event_type, note, *, actor, override_actor):
+        return Task(task_number, "Example", "Details")
+
+    def complete(self, task_number, result, summary, *, actor, override_actor):
+        return CompletionReport(
+            task_number,
+            "builder",
+            CompletionStatus(result),
+            summary,
+        )
+
+    def reopen(self, task_number, *, actor):
+        return self.run
 
 
 class FakeWorktrees:
@@ -83,6 +110,56 @@ class RunCommandTests(unittest.TestCase):
         self.assertIn("abc123", self.output(handle_worktree, commit, services)[1])
         push = Namespace(action="push", task=7, repo=None)
         self.assertIn("origin", self.output(handle_worktree, push, services)[1])
+
+    def test_run_lifecycle_actions_render_results(self) -> None:
+        runs = FakeRuns()
+        runs.run.session_name = "alfred-task-7-builder"
+        services = SimpleNamespace(runs=runs)
+        commands = (
+            Namespace(action="stop", task=7, reason="Pause", cleanup="no", force=False),
+            Namespace(action="continue", task=7, note="Approved", actor="manager"),
+            Namespace(action="attach", task=7),
+            Namespace(action="sessions", task=7),
+            Namespace(
+                action="event",
+                task=7,
+                type="progress",
+                note="Halfway",
+                actor="agent:builder",
+                override_manager=False,
+            ),
+            Namespace(
+                action="complete",
+                task=7,
+                result="success",
+                status_alias=None,
+                note="Done",
+                summary_alias="",
+                actor="agent:builder",
+                override_manager=False,
+            ),
+            Namespace(action="reopen", task=7, actor="manager"),
+        )
+        for command in commands:
+            with self.subTest(action=command.action):
+                self.assertEqual(self.output(handle_run, command, services)[0], 0)
+
+    def test_worktree_create_and_nothing_to_commit(self) -> None:
+        services = SimpleNamespace(
+            tasks=SimpleNamespace(require=lambda number: Task(number, "Example", "Details")),
+            worktrees=FakeWorktrees(),
+            commits=SimpleNamespace(commit=lambda *args, **kwargs: ()),
+        )
+        create = Namespace(action="create", task=7, repos="app")
+        self.assertIn("/tmp/worktrees/app", self.output(handle_worktree, create, services)[1])
+        commit = Namespace(
+            action="commit",
+            task=7,
+            type="PATCH",
+            message="No changes",
+            repo=None,
+        )
+        self.assertIn("Nothing to commit", self.output(handle_worktree, commit, services)[1])
 
 
 if __name__ == "__main__":
