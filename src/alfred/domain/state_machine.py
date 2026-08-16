@@ -12,7 +12,13 @@ from alfred.domain.constants import (
 
 STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
     TaskStatus.PENDING: frozenset(
-        {TaskStatus.IN_PROGRESS, TaskStatus.QUEUED, TaskStatus.BLOCKED, TaskStatus.ON_HOLD}
+        {
+            TaskStatus.RUNNING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.QUEUED,
+            TaskStatus.BLOCKED,
+            TaskStatus.ON_HOLD,
+        }
     ),
     TaskStatus.QUEUED: frozenset(
         {TaskStatus.RUNNING, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.ON_HOLD}
@@ -21,7 +27,13 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
         {TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.ON_HOLD, TaskStatus.IN_REVIEW}
     ),
     TaskStatus.IN_PROGRESS: frozenset(
-        {TaskStatus.BLOCKED, TaskStatus.ON_HOLD, TaskStatus.IN_REVIEW, TaskStatus.PENDING}
+        {
+            TaskStatus.RUNNING,
+            TaskStatus.BLOCKED,
+            TaskStatus.ON_HOLD,
+            TaskStatus.IN_REVIEW,
+            TaskStatus.PENDING,
+        }
     ),
     TaskStatus.IN_REVIEW: frozenset(
         {TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED}

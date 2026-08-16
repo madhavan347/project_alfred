@@ -1,0 +1,283 @@
+"""Run orchestration across tasks, worktrees, sessions, and completion reports."""
+
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Protocol
+from uuid import uuid4
+
+from alfred.adapters.completion import CompletionFileStore
+from alfred.adapters.git.worktrees import WorktreeStatus
+from alfred.adapters.state import JsonStateStore
+from alfred.application.dispatch import AgentDispatcher, DispatchOutcome
+from alfred.application.knowledge import KnowledgeService
+from alfred.application.tasks import TaskService
+from alfred.domain.constants import (
+    CompletionStatus,
+    ExecutionMode,
+    PlanningState,
+    PromptPhase,
+    RunStatus,
+    TaskStatus,
+)
+from alfred.domain.models import AgentRun, CompletionReport, Task
+from alfred.domain.state_machine import (
+    COMPLETION_RUN_STATUS,
+    COMPLETION_TASK_STATUS,
+    normalize_completion_status,
+    require_transition,
+)
+from alfred.ports.session import SessionBackend
+from alfred.utils.time import Clock
+
+
+class WorktreeOperations(Protocol):
+    """Worktree behavior required by run orchestration."""
+
+    def create(
+        self,
+        task: Task,
+        repositories: Sequence[str] | None = None,
+    ) -> dict[str, Path]: ...
+
+    def statuses(self, task_number: int) -> tuple[WorktreeStatus, ...]: ...
+
+    def cleanup(self, task_number: int, *, force: bool = False) -> tuple[Path, ...]: ...
+
+
+class RunService:
+    """Coordinate bounded task dispatch and auditable run state."""
+
+    def __init__(
+        self,
+        tasks: TaskService,
+        store: JsonStateStore,
+        worktrees: WorktreeOperations,
+        dispatcher: AgentDispatcher,
+        sessions: SessionBackend,
+        completions: CompletionFileStore,
+        knowledge: KnowledgeService,
+        clock: Clock,
+    ) -> None:
+        self.tasks = tasks
+        self.store = store
+        self.worktrees = worktrees
+        self.dispatcher = dispatcher
+        self.sessions = sessions
+        self.completions = completions
+        self.knowledge = knowledge
+        self.clock = clock
+
+    def list(self, task_number: int | None = None) -> tuple[AgentRun, ...]:
+        """Return persisted runs, optionally limited to one task."""
+        runs = (AgentRun.from_dict(item) for item in self.store.runs())
+        selected = [run for run in runs if task_number is None or run.task_number == task_number]
+        return tuple(sorted(selected, key=lambda run: (run.started_at, run.run_id)))
+
+    def trigger(
+        self,
+        task_numbers: Sequence[int],
+        *,
+        parallel: int = 1,
+        actor: str = "manager",
+    ) -> tuple[AgentRun, ...]:
+        """Dispatch up to ``parallel`` tasks in the supplied order."""
+        if parallel < 1:
+            raise ValueError("parallel must be at least 1")
+        started: list[AgentRun] = []
+        for task_number in tuple(dict.fromkeys(task_numbers))[:parallel]:
+            task = self.tasks.require(task_number)
+            phase = self._initial_phase(task)
+            paths = self.worktrees.create(task) if phase == PromptPhase.EXECUTION else {}
+            outcome = self.dispatcher.dispatch(task, phase, paths)
+            run = self._new_run(task, phase, paths, outcome)
+            self._save_run(run)
+            self._update_queue(task.task_number, add=outcome.queued)
+            task.status = TaskStatus.QUEUED if outcome.queued else TaskStatus.RUNNING
+            if phase == PromptPhase.PLAN:
+                task.planning_state = PlanningState.STARTED
+            self.tasks.record(
+                task,
+                "RUN_QUEUED" if outcome.queued else "RUN_STARTED",
+                f"{phase.value.title()} phase dispatched to {task.assigned_agent_alias}.",
+                actor=actor,
+            )
+            started.append(run)
+        return tuple(started)
+
+    def continue_execution(
+        self,
+        task_number: int,
+        note: str = "Plan approved.",
+        *,
+        actor: str = "manager",
+    ) -> AgentRun:
+        """Continue a planned task in its existing session after approval."""
+        task = self.tasks.require(task_number)
+        if task.execution_mode != ExecutionMode.PLAN_EXECUTION:
+            raise ValueError(f"Task {task_number} does not use plan-execution mode")
+        if task.planning_state != PlanningState.STARTED:
+            raise ValueError(f"Task {task_number} has no plan awaiting approval")
+        run = self._latest_active(task_number)
+        task.planning_state = PlanningState.APPROVED
+        paths = self.worktrees.create(task)
+        outcome = self.dispatcher.dispatch(task, PromptPhase.EXECUTION, paths)
+        timestamp = self.clock.timestamp()
+        run.phase = PromptPhase.EXECUTION.value
+        run.command_preview = outcome.command_preview
+        run.worktree_paths = {name: str(path) for name, path in paths.items()}
+        run.session_name = outcome.session_name
+        run.session_status = "queued" if outcome.queued else "active"
+        run.run_status = RunStatus.QUEUED if outcome.queued else RunStatus.RUNNING
+        run.last_event_at = timestamp
+        self._save_run(run)
+        self._update_queue(task_number, add=outcome.queued)
+        task.planning_state = PlanningState.COMPLETED
+        task.status = TaskStatus.QUEUED if outcome.queued else TaskStatus.RUNNING
+        self.tasks.record(task, "PLAN_APPROVED", note, actor=actor)
+        return run
+
+    def complete(
+        self,
+        task_number: int,
+        result: str | CompletionStatus,
+        summary: str,
+        *,
+        actor: str,
+        override_actor: bool = False,
+    ) -> CompletionReport:
+        """Finish the active run and write a coordinator completion handoff."""
+        if not summary.strip():
+            raise ValueError("Completion summary is required")
+        task = self.tasks.require(task_number)
+        self._require_actor(task, actor, override_actor)
+        status = normalize_completion_status(result)
+        run = self._latest_active(task_number)
+        target = COMPLETION_TASK_STATUS[status]
+        require_transition(task.status, target)
+        timestamp = self.clock.timestamp()
+        run.run_status = COMPLETION_RUN_STATUS[status]
+        run.ended_at = timestamp
+        run.last_event_at = timestamp
+        run.summary = summary.strip()
+        run.session_status = "inactive"
+        self._save_run(run)
+        self._update_queue(task_number, add=False)
+        task.status = target
+        self.tasks.record(
+            task,
+            f"RUN_{run.run_status.value.upper()}",
+            run.summary,
+            actor=actor,
+        )
+        worktrees = self.worktrees.statuses(task_number)
+        report = CompletionReport(
+            task_number=task_number,
+            agent=task.assigned_agent_alias,
+            status=status,
+            summary=run.summary,
+            repositories=tuple(item.repository for item in worktrees),
+            branches={item.repository: item.branch for item in worktrees},
+            knowledge_entries=self.knowledge.count_for_task(task_number),
+            completed_at=timestamp,
+        )
+        self.completions.write(report)
+        return report
+
+    def stop(
+        self,
+        task_number: int,
+        note: str = "Run stopped.",
+        *,
+        actor: str = "manager",
+        cleanup: bool = False,
+        force: bool = False,
+    ) -> AgentRun:
+        """Stop a live run and optionally remove its worktrees."""
+        task = self.tasks.require(task_number)
+        run = self._latest_active(task_number)
+        if run.session_name and self.sessions.exists(run.session_name):
+            self.sessions.stop(run.session_name)
+        if cleanup:
+            self.worktrees.cleanup(task_number, force=force)
+        timestamp = self.clock.timestamp()
+        run.run_status = RunStatus.STOPPED
+        run.ended_at = timestamp
+        run.last_event_at = timestamp
+        run.summary = note
+        run.session_status = "inactive"
+        self._save_run(run)
+        self._update_queue(task_number, add=False)
+        task.status = TaskStatus.PENDING
+        if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
+            task.planning_state = PlanningState.PENDING
+        self.tasks.record(task, "RUN_STOPPED", note, actor=actor)
+        return run
+
+    def session_names(self) -> tuple[str, ...]:
+        """Return sessions owned by this Alfred instance."""
+        return self.sessions.list()
+
+    def _initial_phase(self, task: Task) -> PromptPhase:
+        if not task.assigned_agent_alias:
+            raise ValueError(f"Task {task.task_number} must be assigned before triggering")
+        if task.execution_mode == ExecutionMode.DIRECT:
+            return PromptPhase.EXECUTION
+        if task.planning_state == PlanningState.PENDING:
+            return PromptPhase.PLAN
+        if task.planning_state in {PlanningState.APPROVED, PlanningState.COMPLETED}:
+            return PromptPhase.EXECUTION
+        if task.planning_state == PlanningState.STARTED:
+            raise ValueError(f"Task {task.task_number} is awaiting plan approval")
+        raise ValueError(f"Task {task.task_number} has an invalid planning state")
+
+    def _new_run(
+        self,
+        task: Task,
+        phase: PromptPhase,
+        paths: dict[str, Path],
+        outcome: DispatchOutcome,
+    ) -> AgentRun:
+        timestamp = self.clock.timestamp()
+        agent = self.dispatcher.config.agents[task.assigned_agent_alias]
+        return AgentRun(
+            run_id=uuid4().hex,
+            task_number=task.task_number,
+            agent_alias=task.assigned_agent_alias,
+            runtime_target=agent.runtime_target,
+            run_status=RunStatus.QUEUED if outcome.queued else RunStatus.RUNNING,
+            started_at=timestamp,
+            phase=phase.value,
+            command_preview=outcome.command_preview,
+            worktree_paths={name: str(path) for name, path in paths.items()},
+            session_name=outcome.session_name,
+            session_status="queued" if outcome.queued else "active",
+            last_event_at=timestamp,
+        )
+
+    def _latest_active(self, task_number: int) -> AgentRun:
+        active = {
+            RunStatus.QUEUED,
+            RunStatus.RUNNING,
+            RunStatus.BLOCKED,
+        }
+        runs = [run for run in self.list(task_number) if run.run_status in active]
+        if not runs:
+            raise ValueError(f"Task {task_number} has no active run")
+        return runs[-1]
+
+    def _save_run(self, run: AgentRun) -> None:
+        records = [item for item in self.store.runs() if item.get("run_id") != run.run_id]
+        records.append(run.to_dict())
+        self.store.save_runs(records)
+
+    def _update_queue(self, task_number: int, *, add: bool) -> None:
+        queue = [item for item in self.store.queue() if item != task_number]
+        if add:
+            queue.append(task_number)
+        self.store.save_queue(queue)
+
+    @staticmethod
+    def _require_actor(task: Task, actor: str, override: bool) -> None:
+        expected = f"agent:{task.assigned_agent_alias}"
+        if not override and actor != expected:
+            raise PermissionError(f"Task {task.task_number} completion requires actor {expected!r}")

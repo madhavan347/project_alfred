@@ -193,6 +193,19 @@ class TaskService:
             if item.get("task_number") == task_number
         )
 
+    def record(
+        self,
+        task: Task,
+        event_type: str,
+        details: str,
+        *,
+        actor: str = "manager",
+    ) -> Task:
+        """Persist a task already changed by a coordinating application service."""
+        task.updated_at = self.clock.timestamp()
+        require_valid_task(task)
+        return self._commit(task, actor, event_type, details)
+
     def _commit(
         self,
         task: Task,
