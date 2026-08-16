@@ -1,8 +1,8 @@
 """Tmux session backend tests using a recording process runner."""
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.tmux import SessionUnavailable, TmuxSessionBackend
 from alfred.ports.process import ProcessResult
@@ -44,7 +44,9 @@ class TmuxSessionBackendTests(unittest.TestCase):
                 ("agent-cli", "--message", "text with spaces"),
             )
             arguments = runner.calls[0][0]
-            self.assertEqual(arguments[:7], ("tmux", "new-session", "-d", "-s", "alfred-task-7", "-c", directory))
+            self.assertEqual(
+                arguments[:7], ("tmux", "new-session", "-d", "-s", "alfred-task-7", "-c", directory)
+            )
             self.assertEqual(arguments[-1], "agent-cli --message 'text with spaces'")
 
     def test_prompt_delivery_uses_tmux_buffer(self) -> None:
@@ -72,9 +74,7 @@ class TmuxSessionBackendTests(unittest.TestCase):
         self.assertEqual(backend.list("alfred-task"), ("alfred-task-7", "alfred-task-8"))
 
     def test_invalid_name_is_rejected(self) -> None:
-        backend = TmuxSessionBackend(
-            RecordingRunner(), executable_finder=lambda _: "/usr/bin/tmux"
-        )
+        backend = TmuxSessionBackend(RecordingRunner(), executable_finder=lambda _: "/usr/bin/tmux")
         with self.assertRaisesRegex(ValueError, "Session name"):
             backend.exists("../outside")
 

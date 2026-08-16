@@ -8,7 +8,6 @@ from alfred.config.models import MarkdownTrackerConfig
 from alfred.domain.models import Task, TaskEvent
 from alfred.utils.files import atomic_write_text
 
-
 TASK_HEADER = "| Task | Title | Status | Priority | Agent | Updated |\n|---:|---|---|---|---|---|"
 AGENT_HEADER = "| Agent | Task | Status | Updated |\n|---|---:|---|---|"
 

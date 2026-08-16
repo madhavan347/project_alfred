@@ -1,7 +1,6 @@
 """Configurable learner-agent session workflow."""
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from alfred.config.models import AlfredConfig
 from alfred.ports.session import SessionBackend
@@ -70,7 +69,7 @@ class LearnerService:
             [
                 "# Alfred Knowledge Learner",
                 "",
-                "Review processed task completion reports and extract only new, reusable knowledge.",
+                "Review processed completion reports and extract only new, reusable knowledge.",
                 "Avoid duplicates, keep entries concise, and preserve source task references.",
                 "",
                 f"Processed completions: {processed}",

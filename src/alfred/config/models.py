@@ -1,10 +1,10 @@
 """Immutable configuration detail objects used by Alfred services."""
 
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from types import MappingProxyType
-from typing import Mapping
 
 from alfred.config.constants import (
     CONFIG_VERSION,

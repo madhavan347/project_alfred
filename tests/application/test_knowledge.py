@@ -1,9 +1,9 @@
 """Markdown knowledge-store tests."""
 
-from datetime import datetime
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from alfred.application.knowledge import KnowledgeService

@@ -12,7 +12,6 @@ from typing import Any
 from alfred.adapters.state import JsonStateStore
 from alfred.utils.files import atomic_write_json, atomic_write_text
 
-
 LEGACY_FILES = ("tasks.json", "runs.json", "queue.json", "agent_map.json")
 MIGRATION_NAME = "legacy-runtime-v1"
 

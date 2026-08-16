@@ -1,9 +1,9 @@
 """Structured subprocess adapter tests."""
 
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.process import ProcessError, SubprocessRunner
 

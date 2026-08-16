@@ -1,10 +1,10 @@
 """Support command handler tests."""
 
+import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
-import unittest
 
 from alfred.cli.support_commands import handle_notifications, handle_report, handle_sync
 from alfred.domain.constants import TaskStatus
@@ -47,9 +47,7 @@ class SupportCommandTests(unittest.TestCase):
             "2026-08-16T10:30:00+00:00",
             {"summary": "Ready for review"},
         )
-        services = SimpleNamespace(
-            notifications=SimpleNamespace(pending=lambda: (notification,))
-        )
+        services = SimpleNamespace(notifications=SimpleNamespace(pending=lambda: (notification,)))
         output = self.output(
             handle_notifications,
             Namespace(action=None),

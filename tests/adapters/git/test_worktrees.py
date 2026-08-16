@@ -1,8 +1,8 @@
 """Git worktree lifecycle integration tests."""
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.git import GitWorktreeManager
 from alfred.adapters.process import ProcessError, SubprocessRunner

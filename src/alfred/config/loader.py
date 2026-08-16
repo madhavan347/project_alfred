@@ -60,9 +60,7 @@ def discover_config(
         candidate = directory / CONFIG_DIRECTORY / CONFIG_FILENAME
         if candidate.is_file():
             return candidate
-    raise ConfigError(
-        "No Alfred configuration found. Run 'alfred init' or pass --config PATH."
-    )
+    raise ConfigError("No Alfred configuration found. Run 'alfred init' or pass --config PATH.")
 
 
 def load_config(path: Path) -> AlfredConfig:
@@ -75,7 +73,16 @@ def load_config(path: Path) -> AlfredConfig:
 
     _reject_unknown(
         payload,
-        {"version", "alfred", "workspace", "repositories", "agents", "trackers", "commit", "knowledge"},
+        {
+            "version",
+            "alfred",
+            "workspace",
+            "repositories",
+            "agents",
+            "trackers",
+            "commit",
+            "knowledge",
+        },
         "configuration",
     )
     version = _integer(payload, "version", default=CONFIG_VERSION)
@@ -103,9 +110,7 @@ def load_config(path: Path) -> AlfredConfig:
         },
         "alfred",
     )
-    tmux_policy = _string(
-        alfred_table, "tmux_unavailable_policy", default=DEFAULT_TMUX_POLICY
-    )
+    tmux_policy = _string(alfred_table, "tmux_unavailable_policy", default=DEFAULT_TMUX_POLICY)
     if tmux_policy not in VALID_TMUX_POLICIES:
         expected = ", ".join(sorted(VALID_TMUX_POLICIES))
         raise ConfigError(f"alfred.tmux_unavailable_policy must be one of: {expected}")
@@ -127,9 +132,7 @@ def load_config(path: Path) -> AlfredConfig:
             ),
             workspace_root,
         ),
-        session_prefix=_string(
-            alfred_table, "session_prefix", default=DEFAULT_SESSION_PREFIX
-        ),
+        session_prefix=_string(alfred_table, "session_prefix", default=DEFAULT_SESSION_PREFIX),
         tmux_unavailable_policy=tmux_policy,
     )
 
@@ -200,7 +203,9 @@ def _load_agents(value: Mapping[str, Any]) -> dict[str, AgentConfig]:
 def _load_trackers(value: Mapping[str, Any], root: Path) -> TrackerConfig:
     _reject_unknown(value, {"markdown"}, "trackers")
     markdown = _table(value, "markdown")
-    _reject_unknown(markdown, {"enabled", "canonical", "agents", "daily_notes"}, "trackers.markdown")
+    _reject_unknown(
+        markdown, {"enabled", "canonical", "agents", "daily_notes"}, "trackers.markdown"
+    )
     enabled = _boolean(markdown, "enabled", default=False)
     canonical = _optional_path(markdown, "canonical", root)
     agents = _optional_path(markdown, "agents", root)
@@ -233,12 +238,8 @@ def _load_commits(value: Mapping[str, Any]) -> CommitConfig:
 def _load_knowledge(value: Mapping[str, Any], root: Path) -> KnowledgeConfig:
     _reject_unknown(value, {"directory", "required_completion_entries"}, "knowledge")
     return KnowledgeConfig(
-        directory=_resolve_path(
-            _string(value, "directory", default=".alfred/knowledge"), root
-        ),
-        required_completion_entries=_integer(
-            value, "required_completion_entries", default=0
-        ),
+        directory=_resolve_path(_string(value, "directory", default=".alfred/knowledge"), root),
+        required_completion_entries=_integer(value, "required_completion_entries", default=0),
     )
 
 

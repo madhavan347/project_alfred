@@ -1,8 +1,8 @@
 """Completion-file handoff tests."""
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.completion import CompletionFileStore
 from alfred.domain.constants import CompletionStatus
@@ -34,8 +34,7 @@ class CompletionFileStoreTests(unittest.TestCase):
             store.pending_directory.mkdir(parents=True)
             path = store.pending_directory / "task-7.json"
             path.write_text(
-                '{"task_number": 7, "agent": "builder", "status": "failure", '
-                '"summary": "Failed"}'
+                '{"task_number": 7, "agent": "builder", "status": "failure", "summary": "Failed"}'
             )
             self.assertEqual(store.read(path).status, CompletionStatus.FAILED)
 

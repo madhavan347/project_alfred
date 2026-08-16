@@ -1,8 +1,8 @@
 """Optional Markdown tracker behavior tests."""
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.markdown import DisabledTracker, MarkdownTracker
 from alfred.config.models import MarkdownTrackerConfig

@@ -1,11 +1,11 @@
 """Run and worktree command handler tests."""
 
+import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
 
 from alfred.adapters.git.commits import CommitResult, PushResult
 from alfred.adapters.git.worktrees import WorktreeStatus

@@ -1,9 +1,9 @@
 """Markdown synchronization validation tests."""
 
-from datetime import datetime
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from alfred.adapters.markdown import DisabledTracker, MarkdownTracker

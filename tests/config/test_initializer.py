@@ -1,10 +1,10 @@
 """Workspace initialization tests."""
 
+import tempfile
+import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
-import tempfile
-import unittest
 
 from alfred.cli.main import main
 from alfred.config.initializer import initialize_workspace

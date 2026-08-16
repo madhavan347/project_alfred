@@ -1,9 +1,9 @@
 """Bracket-tag commit adapter integration tests."""
 
-from pathlib import Path
-from types import MappingProxyType
 import tempfile
 import unittest
+from pathlib import Path
+from types import MappingProxyType
 
 from alfred.adapters.git import GitCommitManager, GitWorktreeManager
 from alfred.adapters.process import SubprocessRunner
@@ -36,9 +36,7 @@ class GitCommitManagerTests(unittest.TestCase):
                 ),
             ),
         )
-        self.worktrees = GitWorktreeManager(
-            self.workspace, self.root / "worktrees", self.runner
-        )
+        self.worktrees = GitWorktreeManager(self.workspace, self.root / "worktrees", self.runner)
         self.task = Task(
             task_number=7,
             title="Example",
@@ -60,9 +58,7 @@ class GitCommitManagerTests(unittest.TestCase):
         self.path.joinpath("feature.txt").write_text("implemented\n")
         result = self.commits.commit(7, "patch", "Add example behavior")
         self.assertEqual(result[0].message, "[PATCH] Add example behavior")
-        log = self.runner.run(
-            ("git", "log", "-1", "--format=%s"), cwd=self.path
-        ).stdout.strip()
+        log = self.runner.run(("git", "log", "-1", "--format=%s"), cwd=self.path).stdout.strip()
         self.assertEqual(log, "[PATCH] Add example behavior")
 
     def test_clean_worktree_creates_no_commit(self) -> None:

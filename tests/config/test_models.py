@@ -1,7 +1,7 @@
 """Configuration detail-object tests."""
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from alfred.config.constants import DEFAULT_COMMIT_TAGS
 from alfred.config.models import AlfredConfig, RepositoryConfig, WorkspaceConfig

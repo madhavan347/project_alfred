@@ -36,11 +36,7 @@ class NotificationService:
 
     def pending(self) -> tuple[Notification, ...]:
         """Return unacknowledged notifications."""
-        return tuple(
-            notification
-            for notification in self._all()
-            if not notification.acknowledged
-        )
+        return tuple(notification for notification in self._all() if not notification.acknowledged)
 
     def acknowledge(self, task_number: int) -> int:
         """Acknowledge every notification for a task and return the count."""

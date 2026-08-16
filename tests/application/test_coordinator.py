@@ -1,9 +1,9 @@
 """Coordinator completion and health-cycle tests."""
 
-from pathlib import Path
-from types import MappingProxyType
 import tempfile
 import unittest
+from pathlib import Path
+from types import MappingProxyType
 from zoneinfo import ZoneInfo
 
 from alfred.adapters.completion import CompletionFileStore

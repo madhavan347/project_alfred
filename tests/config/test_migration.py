@@ -1,9 +1,9 @@
 """Legacy runtime migration tests."""
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from alfred.adapters.state import JsonStateStore
 from alfred.config.migration import MigrationError, migrate_legacy_runtime

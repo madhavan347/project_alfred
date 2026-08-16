@@ -1,10 +1,10 @@
 """Coordinator and learner command handler tests."""
 
+import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
-import unittest
 
 from alfred.application.coordinator import CoordinatorCycle
 from alfred.application.learner import LearnerStatus
@@ -63,9 +63,7 @@ class DaemonCommandTests(unittest.TestCase):
                 agents={"builder": object()},
             ),
             sessions=FakeSessions(),
-            coordinator=SimpleNamespace(
-                process_once=lambda: CoordinatorCycle(processed=2)
-            ),
+            coordinator=SimpleNamespace(process_once=lambda: CoordinatorCycle(processed=2)),
             learner=FakeLearner(),
         )
 

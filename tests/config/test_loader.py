@@ -1,14 +1,13 @@
 """TOML configuration discovery and loading tests."""
 
 import os
-from pathlib import Path
 import tempfile
 import textwrap
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from alfred.config.loader import ConfigError, discover_config, load_config
-
 
 VALID_CONFIG = """
 version = 1

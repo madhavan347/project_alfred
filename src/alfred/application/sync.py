@@ -60,9 +60,7 @@ class SyncService:
             actor=actor,
         )
         return tuple(
-            path
-            for path in (self.config.canonical, self.config.agents)
-            if path is not None
+            path for path in (self.config.canonical, self.config.agents) if path is not None
         )
 
 

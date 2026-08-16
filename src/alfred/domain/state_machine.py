@@ -9,7 +9,6 @@ from alfred.domain.constants import (
     TaskStatus,
 )
 
-
 STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
     TaskStatus.PENDING: frozenset(
         {
@@ -38,12 +37,8 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
     TaskStatus.IN_REVIEW: frozenset(
         {TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED}
     ),
-    TaskStatus.BLOCKED: frozenset(
-        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}
-    ),
-    TaskStatus.ON_HOLD: frozenset(
-        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}
-    ),
+    TaskStatus.BLOCKED: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),
+    TaskStatus.ON_HOLD: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),
     TaskStatus.COMPLETED: frozenset(),
     TaskStatus.CONSOLIDATED: frozenset(),
 }
@@ -52,9 +47,7 @@ PHASE_TRANSITIONS: Mapping[LifecyclePhase, frozenset[LifecyclePhase]] = {
     LifecyclePhase.ACTIVE: frozenset(
         {LifecyclePhase.TESTING_DEPLOYMENT, LifecyclePhase.CONSOLIDATED}
     ),
-    LifecyclePhase.TESTING_DEPLOYMENT: frozenset(
-        {LifecyclePhase.ACTIVE, LifecyclePhase.ARCHIVED}
-    ),
+    LifecyclePhase.TESTING_DEPLOYMENT: frozenset({LifecyclePhase.ACTIVE, LifecyclePhase.ARCHIVED}),
     LifecyclePhase.ARCHIVED: frozenset(),
     LifecyclePhase.CONSOLIDATED: frozenset(),
 }

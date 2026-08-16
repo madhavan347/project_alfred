@@ -114,15 +114,11 @@ class AgentDispatcher:
             phase,
             self.builder.build(task, phase, worktree_paths),
         )
-        session_name = (
-            f"{self.config.runtime.session_prefix}-{task.task_number}-{agent.alias}"
-        )
+        session_name = f"{self.config.runtime.session_prefix}-{task.task_number}-{agent.alias}"
         preview = shlex.join(command)
         if not self.sessions.available():
             if self.config.runtime.tmux_unavailable_policy == "queue":
-                return DispatchOutcome(
-                    session_name, prompt_file, preview, False, False, True
-                )
+                return DispatchOutcome(session_name, prompt_file, preview, False, False, True)
             raise RuntimeError("The configured session backend is unavailable")
 
         reused = self.sessions.exists(session_name)

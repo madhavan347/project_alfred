@@ -35,7 +35,12 @@ class TaskService:
 
     def list(self) -> tuple[Task, ...]:
         """Return tasks ordered by task number."""
-        return tuple(sorted((Task.from_dict(item) for item in self.store.tasks()), key=lambda item: item.task_number))
+        return tuple(
+            sorted(
+                (Task.from_dict(item) for item in self.store.tasks()),
+                key=lambda item: item.task_number,
+            )
+        )
 
     def get(self, task_number: int) -> Task | None:
         """Return a task by number."""

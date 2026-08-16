@@ -1,9 +1,9 @@
 """Prompt and agent dispatch workflow tests."""
 
-from pathlib import Path
-from types import MappingProxyType
 import tempfile
 import unittest
+from pathlib import Path
+from types import MappingProxyType
 
 from alfred.application.dispatch import AgentDispatcher, PromptBuilder
 from alfred.config.models import (
@@ -105,9 +105,7 @@ class AgentDispatchTests(unittest.TestCase):
 
     def test_unavailable_backend_queues_without_creating_session(self) -> None:
         sessions = RecordingSessions(available=False)
-        outcome = AgentDispatcher(self.config, sessions).dispatch(
-            self.task, PromptPhase.PLAN, {}
-        )
+        outcome = AgentDispatcher(self.config, sessions).dispatch(self.task, PromptPhase.PLAN, {})
         self.assertTrue(outcome.queued)
         self.assertFalse(outcome.started)
         self.assertEqual(sessions.created, [])
@@ -130,9 +128,7 @@ class AgentDispatchTests(unittest.TestCase):
             agents=MappingProxyType({"builder": invalid}),
         )
         with self.assertRaisesRegex(ValueError, "unknown placeholder: missing"):
-            AgentDispatcher(config, RecordingSessions()).dispatch(
-                self.task, PromptPhase.PLAN, {}
-            )
+            AgentDispatcher(config, RecordingSessions()).dispatch(self.task, PromptPhase.PLAN, {})
 
 
 if __name__ == "__main__":

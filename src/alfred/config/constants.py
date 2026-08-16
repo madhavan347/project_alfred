@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 CONFIG_VERSION = 1
 CONFIG_DIRECTORY = Path(".alfred")
 CONFIG_FILENAME = "config.toml"

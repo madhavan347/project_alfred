@@ -1,9 +1,9 @@
 """Run orchestration workflow tests."""
 
-from datetime import datetime
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from alfred.adapters.completion import CompletionFileStore
@@ -14,8 +14,20 @@ from alfred.application.dispatch import AgentDispatcher
 from alfred.application.knowledge import KnowledgeService
 from alfred.application.runs import RunService
 from alfred.application.tasks import TaskService
-from alfred.config.models import AgentConfig, AlfredConfig, CommandConfig, RuntimeConfig, WorkspaceConfig
-from alfred.domain.constants import CompletionStatus, ExecutionMode, PlanningState, RunStatus, TaskStatus
+from alfred.config.models import (
+    AgentConfig,
+    AlfredConfig,
+    CommandConfig,
+    RuntimeConfig,
+    WorkspaceConfig,
+)
+from alfred.domain.constants import (
+    CompletionStatus,
+    ExecutionMode,
+    PlanningState,
+    RunStatus,
+    TaskStatus,
+)
 from alfred.domain.models import Task
 from alfred.utils.time import Clock
 

@@ -34,13 +34,9 @@ class StateMachineTests(unittest.TestCase):
 
     def test_completion_status_has_one_canonical_mapping(self) -> None:
         self.assertEqual(normalize_completion_status("failure"), CompletionStatus.FAILED)
-        self.assertEqual(
-            COMPLETION_TASK_STATUS[CompletionStatus.FAILED], TaskStatus.IN_PROGRESS
-        )
+        self.assertEqual(COMPLETION_TASK_STATUS[CompletionStatus.FAILED], TaskStatus.IN_PROGRESS)
         self.assertEqual(COMPLETION_RUN_STATUS[CompletionStatus.FAILED], RunStatus.FAILED)
-        self.assertEqual(
-            COMPLETION_TASK_STATUS[CompletionStatus.BLOCKED], TaskStatus.BLOCKED
-        )
+        self.assertEqual(COMPLETION_TASK_STATUS[CompletionStatus.BLOCKED], TaskStatus.BLOCKED)
 
 
 if __name__ == "__main__":

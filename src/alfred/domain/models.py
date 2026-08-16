@@ -47,8 +47,12 @@ class Task:
     def from_dict(cls, data: dict[str, Any]) -> "Task":
         """Load current or legacy task JSON into the typed model."""
         normalized = dict(data)
-        normalized["created_at"] = normalized.pop("created_at_ist", normalized.get("created_at", ""))
-        normalized["updated_at"] = normalized.pop("updated_at_ist", normalized.get("updated_at", ""))
+        normalized["created_at"] = normalized.pop(
+            "created_at_ist", normalized.get("created_at", "")
+        )
+        normalized["updated_at"] = normalized.pop(
+            "updated_at_ist", normalized.get("updated_at", "")
+        )
         normalized.setdefault("target_repositories", normalized.pop("repos", []))
         normalized["status"] = TaskStatus(normalized.get("status", TaskStatus.PENDING))
         normalized["dispatch_mode"] = DispatchMode(

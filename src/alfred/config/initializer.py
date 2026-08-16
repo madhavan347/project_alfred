@@ -4,7 +4,6 @@ from pathlib import Path
 
 from alfred.config.constants import CONFIG_DIRECTORY, CONFIG_FILENAME
 
-
 DEFAULT_CONFIG = """\
 version = 1
 

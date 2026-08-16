@@ -7,7 +7,6 @@ from typing import Any
 
 from alfred.utils.files import atomic_write_json
 
-
 STATE_VERSION = 1
 DEFAULT_DOCUMENTS: Mapping[str, object] = {
     "tasks": {"schema_version": STATE_VERSION, "tasks": []},

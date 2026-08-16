@@ -1,9 +1,9 @@
 """Configurable learner session tests."""
 
-from pathlib import Path
-from types import MappingProxyType
 import tempfile
 import unittest
+from pathlib import Path
+from types import MappingProxyType
 
 from alfred.application.learner import LearnerService
 from alfred.config.models import (
@@ -58,9 +58,7 @@ class LearnerServiceTests(unittest.TestCase):
         self.config = AlfredConfig(
             config_path=root / "config.toml",
             workspace=WorkspaceConfig(root=root),
-            runtime=RuntimeConfig(
-                state_directory=root / "state", temp_directory=root / "tmp"
-            ),
+            runtime=RuntimeConfig(state_directory=root / "state", temp_directory=root / "tmp"),
             agents=MappingProxyType({"learner": agent}),
             knowledge=KnowledgeConfig(directory=root / "knowledge"),
         )

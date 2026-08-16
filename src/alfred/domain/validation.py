@@ -1,6 +1,6 @@
 """Pure validation rules for task details."""
 
-from alfred.domain.constants import ExecutionMode, PlanningState, PRIORITIES, WorktreeMode
+from alfred.domain.constants import PRIORITIES, ExecutionMode, PlanningState, WorktreeMode
 from alfred.domain.models import Task
 
 
