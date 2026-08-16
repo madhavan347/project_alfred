@@ -177,3 +177,17 @@ class Notification:
     def from_dict(cls, data: dict[str, Any]) -> "Notification":
         """Load a notification record."""
         return cls(**data)
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeEntry:
+    """One durable learning contributed by a completed task."""
+
+    task_number: int
+    category: str
+    title: str
+    content: str
+    created_at: str
+    agent: str = ""
+    related_files: tuple[str, ...] = ()
+    related_repositories: tuple[str, ...] = ()

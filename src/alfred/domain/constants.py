@@ -65,4 +65,12 @@ class PromptPhase(StrEnum):
     EXECUTION = "execution"
 
 
+class KnowledgeCategory(StrEnum):
+    PATTERNS = "patterns"
+    DECISIONS = "decisions"
+    ENTITIES = "entities"
+    ISSUES = "issues"
+    CONVENTIONS = "conventions"
+
+
 PRIORITIES = frozenset({"P0", "P1", "P2", "P3", "P4", "P5"})
