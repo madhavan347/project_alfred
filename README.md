@@ -147,8 +147,8 @@ fragment for manual review.
 ## Development
 
 ```console
-.venv/bin/ruff check src tests
-.venv/bin/ruff format --check src tests
+.venv/bin/ruff check alfred src tests
+.venv/bin/ruff format --check alfred src tests
 .venv/bin/mypy src
 .venv/bin/pytest --cov=alfred --cov-report=term-missing
 .venv/bin/python -m build
