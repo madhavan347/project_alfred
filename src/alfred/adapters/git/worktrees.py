@@ -63,7 +63,13 @@ class GitWorktreeManager:
                 self._ensure_not_diverged(
                     repository.path, repository.default_branch, task.branch_name
                 )
-                arguments = ("git", "worktree", "add", str(target), task.branch_name)
+                arguments: tuple[str, ...] = (
+                    "git",
+                    "worktree",
+                    "add",
+                    str(target),
+                    task.branch_name,
+                )
             else:
                 self.runner.run(
                     ("git", "rev-parse", "--verify", repository.default_branch),

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from alfred.adapters.git.worktrees import GitWorktreeManager
+from alfred.adapters.git.worktrees import GitWorktreeManager, WorktreeStatus
 from alfred.config.models import CommitConfig, WorkspaceConfig
 from alfred.ports.process import ProcessRunner
 
@@ -100,7 +100,11 @@ class GitCommitManager:
             )
         return tuple(results)
 
-    def _selected_statuses(self, task_number: int, repository: str | None):
+    def _selected_statuses(
+        self,
+        task_number: int,
+        repository: str | None,
+    ) -> tuple[WorktreeStatus, ...]:
         statuses = self.worktrees.statuses(task_number)
         if repository is None:
             return statuses

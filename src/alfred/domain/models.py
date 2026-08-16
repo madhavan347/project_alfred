@@ -154,6 +154,8 @@ class CompletionReport:
         raw_status = normalized.get("status")
         if raw_status == "failure":
             raw_status = CompletionStatus.FAILED
+        if not isinstance(raw_status, (str, CompletionStatus)):
+            raise ValueError("Completion status is required")
         normalized["status"] = CompletionStatus(raw_status)
         normalized["repositories"] = tuple(
             normalized.pop("repos_touched", normalized.get("repositories", ()))

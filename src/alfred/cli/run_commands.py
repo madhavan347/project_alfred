@@ -63,11 +63,11 @@ def handle_run(args: argparse.Namespace, services: AlfredServices) -> int:
         return 0
 
     if args.action == "attach":
-        run = services.runs.active(args.task)
-        if run is None or not run.session_name:
+        active_run = services.runs.active(args.task)
+        if active_run is None or not active_run.session_name:
             print(f"No active session for task {args.task}")
         else:
-            print(f"tmux attach-session -t {run.session_name}")
+            print(f"tmux attach-session -t {active_run.session_name}")
         return 0
 
     if args.action == "sessions":
@@ -149,9 +149,9 @@ def handle_worktree(args: argparse.Namespace, services: AlfredServices) -> int:
             print(f"{result.repository}: {result.revision} {result.message}")
         return 0
     if args.action == "push":
-        results = services.commits.push(args.task, repository=args.repo)
-        for result in results:
-            print(f"{result.repository}: pushed {result.branch} to {result.remote}")
+        push_results = services.commits.push(args.task, repository=args.repo)
+        for push_result in push_results:
+            print(f"{push_result.repository}: pushed {push_result.branch} to {push_result.remote}")
         return 0
     raise ValueError(f"Unsupported worktree action: {args.action}")
 

@@ -55,7 +55,7 @@ class KnowledgeService:
     def list(self, category: str | KnowledgeCategory | None = None) -> tuple[Path, ...]:
         """List entries in one category or the complete knowledge store."""
         if category is not None:
-            directories = (self.directory / KnowledgeCategory(category).value,)
+            directories: tuple[Path, ...] = (self.directory / KnowledgeCategory(category).value,)
         else:
             directories = tuple(self.directory / item.value for item in KnowledgeCategory)
         entries: list[Path] = []
