@@ -17,6 +17,7 @@ version = 1
 timezone = "Europe/London"
 state_directory = ".alfred/state"
 temp_directory = ".alfred/tmp"
+worktree_directory = ".alfred/worktrees"
 session_prefix = "workflow"
 tmux_unavailable_policy = "error"
 

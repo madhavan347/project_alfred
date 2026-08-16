@@ -12,6 +12,7 @@ version = 1
 timezone = "UTC"
 state_directory = ".alfred/state"
 temp_directory = ".alfred/tmp"
+worktree_directory = ".alfred/worktrees"
 session_prefix = "alfred-task"
 tmux_unavailable_policy = "queue"
 
@@ -45,5 +46,6 @@ def initialize_workspace(root: Path, *, force: bool = False) -> Path:
     config_directory.mkdir(parents=True, exist_ok=True)
     (config_directory / "state").mkdir(exist_ok=True)
     (config_directory / "tmp").mkdir(exist_ok=True)
+    (config_directory / "worktrees").mkdir(exist_ok=True)
     config_path.write_text(DEFAULT_CONFIG, encoding="utf-8")
     return config_path

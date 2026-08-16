@@ -14,6 +14,7 @@ from alfred.config.constants import (
     DEFAULT_TEMP_DIRECTORY,
     DEFAULT_TIMEZONE,
     DEFAULT_TMUX_POLICY,
+    DEFAULT_WORKTREE_DIRECTORY,
 )
 
 
@@ -83,6 +84,7 @@ class RuntimeConfig:
     timezone: str = DEFAULT_TIMEZONE
     state_directory: Path = DEFAULT_STATE_DIRECTORY
     temp_directory: Path = DEFAULT_TEMP_DIRECTORY
+    worktree_directory: Path = DEFAULT_WORKTREE_DIRECTORY
     session_prefix: str = DEFAULT_SESSION_PREFIX
     tmux_unavailable_policy: str = DEFAULT_TMUX_POLICY
 

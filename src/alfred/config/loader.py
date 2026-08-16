@@ -17,6 +17,7 @@ from alfred.config.constants import (
     DEFAULT_TEMP_DIRECTORY,
     DEFAULT_TIMEZONE,
     DEFAULT_TMUX_POLICY,
+    DEFAULT_WORKTREE_DIRECTORY,
     VALID_TMUX_POLICIES,
 )
 from alfred.config.models import (
@@ -96,6 +97,7 @@ def load_config(path: Path) -> AlfredConfig:
             "timezone",
             "state_directory",
             "temp_directory",
+            "worktree_directory",
             "session_prefix",
             "tmux_unavailable_policy",
         },
@@ -115,6 +117,14 @@ def load_config(path: Path) -> AlfredConfig:
         ),
         temp_directory=_resolve_path(
             _string(alfred_table, "temp_directory", default=str(DEFAULT_TEMP_DIRECTORY)),
+            workspace_root,
+        ),
+        worktree_directory=_resolve_path(
+            _string(
+                alfred_table,
+                "worktree_directory",
+                default=str(DEFAULT_WORKTREE_DIRECTORY),
+            ),
             workspace_root,
         ),
         session_prefix=_string(
