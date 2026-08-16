@@ -1,0 +1,22 @@
+# Changelog
+
+All notable changes will be documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project does not
+claim Semantic Versioning compatibility until its first supported release.
+
+## Unreleased
+
+### Added
+
+- Typed project-local TOML configuration and versioned atomic JSON state.
+- Task, agent, run, worktree, plan-approval, completion, notification, and knowledge workflows.
+- Optional transactional Markdown tracker synchronization.
+- Non-destructive legacy JSON migration with backups and idempotent markers.
+- macOS-oriented installable CLI, strict quality checks, and public-project documentation.
+
+### Security
+
+- Shell-free subprocess argument handling and validated repository/session identifiers.
+- Explicit-only push and forced dirty-worktree cleanup.
+- Publication remains blocked until ownership and license selection are complete.
