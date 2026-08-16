@@ -13,6 +13,7 @@ class CompletionFileStore:
     def __init__(self, directory: Path) -> None:
         self.pending_directory = directory / "completions" / "pending"
         self.processed_directory = directory / "completions" / "processed"
+        self.invalid_directory = directory / "completions" / "invalid"
 
     def write(self, report: CompletionReport) -> Path:
         """Atomically replace the pending report for one task."""
@@ -40,5 +41,12 @@ class CompletionFileStore:
         """Move a processed report out of the pending queue."""
         self.processed_directory.mkdir(parents=True, exist_ok=True)
         destination = self.processed_directory / path.name
+        path.replace(destination)
+        return destination
+
+    def mark_invalid(self, path: Path) -> Path:
+        """Quarantine a malformed report so polling does not repeat forever."""
+        self.invalid_directory.mkdir(parents=True, exist_ok=True)
+        destination = self.invalid_directory / path.name
         path.replace(destination)
         return destination
