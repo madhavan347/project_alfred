@@ -60,4 +60,9 @@ class CompletionStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class PromptPhase(StrEnum):
+    PLAN = "plan"
+    EXECUTION = "execution"
+
+
 PRIORITIES = frozenset({"P0", "P1", "P2", "P3", "P4", "P5"})

@@ -34,6 +34,13 @@ class AgentConfig:
     runtime_target: str
     commands: CommandConfig
 
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", self.alias):
+            raise ValueError(
+                "Agent alias must start with an alphanumeric character and contain only "
+                "letters, numbers, underscores, or hyphens"
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class RepositoryConfig:
