@@ -14,6 +14,7 @@ DEFAULT_DOCUMENTS: Mapping[str, object] = {
     "runs": {"schema_version": STATE_VERSION, "runs": []},
     "queue": {"schema_version": STATE_VERSION, "queued_tasks": []},
     "notifications": {"schema_version": STATE_VERSION, "notifications": []},
+    "events": {"schema_version": STATE_VERSION, "events": []},
 }
 
 
@@ -103,6 +104,14 @@ class JsonStateStore:
             "notifications",
             {"notifications": [dict(notification) for notification in notifications]},
         )
+
+    def events(self) -> list[dict[str, Any]]:
+        """Return task event records."""
+        return _record_list(self.read_document("events"), "events")
+
+    def save_events(self, events: Sequence[Mapping[str, Any]]) -> None:
+        """Replace task event records."""
+        self.write_document("events", {"events": [dict(event) for event in events]})
 
 
 def _record_list(document: Mapping[str, Any], key: str) -> list[dict[str, Any]]:

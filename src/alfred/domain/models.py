@@ -120,6 +120,10 @@ class TaskEvent:
         """Render one stable Markdown timeline row."""
         return f"- **{self.timestamp}** | `{self.actor}` | `{self.event_type}` | {self.details}"
 
+    def to_dict(self) -> dict[str, str]:
+        """Return a JSON-compatible representation."""
+        return asdict(self)
+
 
 @dataclass(frozen=True, slots=True)
 class CompletionReport:
