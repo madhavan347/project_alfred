@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from types import MappingProxyType
 from typing import Mapping
 
@@ -42,6 +43,13 @@ class RepositoryConfig:
     path: Path
     default_branch: str = "main"
     selected_by_default: bool = False
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.name):
+            raise ValueError(
+                "Repository name must start with an alphanumeric character and contain only "
+                "letters, numbers, dots, underscores, or hyphens"
+            )
 
 
 @dataclass(frozen=True, slots=True)
