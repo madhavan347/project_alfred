@@ -93,6 +93,17 @@ class JsonStateStore:
         """Replace the queue with sorted unique task numbers."""
         self.write_document("queue", {"queued_tasks": sorted(set(task_numbers))})
 
+    def notifications(self) -> list[dict[str, Any]]:
+        """Return notification records."""
+        return _record_list(self.read_document("notifications"), "notifications")
+
+    def save_notifications(self, notifications: Sequence[Mapping[str, Any]]) -> None:
+        """Replace notification records."""
+        self.write_document(
+            "notifications",
+            {"notifications": [dict(notification) for notification in notifications]},
+        )
+
 
 def _record_list(document: Mapping[str, Any], key: str) -> list[dict[str, Any]]:
     value = document.get(key)
