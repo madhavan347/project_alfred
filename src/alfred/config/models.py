@@ -42,6 +42,7 @@ class RepositoryConfig:
     name: str
     path: Path
     default_branch: str = "main"
+    remote: str = "origin"
     selected_by_default: bool = False
 
     def __post_init__(self) -> None:

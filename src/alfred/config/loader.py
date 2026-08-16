@@ -147,7 +147,11 @@ def _load_repositories(value: object, root: Path) -> tuple[RepositoryConfig, ...
     names: set[str] = set()
     for index, item in enumerate(value):
         table = _as_table(item, f"repositories[{index}]")
-        _reject_unknown(table, {"name", "path", "default_branch", "selected_by_default"}, f"repositories[{index}]")
+        _reject_unknown(
+            table,
+            {"name", "path", "default_branch", "remote", "selected_by_default"},
+            f"repositories[{index}]",
+        )
         name = _string(table, "name")
         if name in names:
             raise ConfigError(f"Duplicate repository name: {name}")
@@ -157,6 +161,7 @@ def _load_repositories(value: object, root: Path) -> tuple[RepositoryConfig, ...
                 name=name,
                 path=_resolve_path(_string(table, "path"), root),
                 default_branch=_string(table, "default_branch", default="main"),
+                remote=_string(table, "remote", default="origin"),
                 selected_by_default=_boolean(table, "selected_by_default", default=False),
             )
         )
