@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 
 from alfred.bootstrap import build_services
+from alfred.cli.daemon_commands import handle_coordinator, handle_learner
 from alfred.cli.parser import build_parser
 from alfred.cli.run_commands import handle_run, handle_worktree
 from alfred.cli.support_commands import (
@@ -35,6 +36,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "knowledge": handle_knowledge,
         "report": handle_report,
         "notifications": handle_notifications,
+        "coordinator": handle_coordinator,
+        "learner": handle_learner,
     }
     if args.resource in handlers:
         try:
