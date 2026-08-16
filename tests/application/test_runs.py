@@ -191,6 +191,27 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.sessions.names, set())
         self.assertEqual(self.worktrees.cleaned, 1)
 
+    def test_agent_events_are_actor_checked(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        with self.assertRaises(PermissionError):
+            self.service.record_event(7, "progress", actor="manager")
+        task = self.service.record_event(
+            7,
+            "progress",
+            "Halfway",
+            actor="agent:builder",
+        )
+        self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
+
+    def test_stopped_task_can_be_reopened(self) -> None:
+        self.add_task()
+        first = self.service.trigger((7,))[0]
+        self.service.stop(7)
+        reopened = self.service.reopen(7)
+        self.assertNotEqual(reopened.run_id, first.run_id)
+        self.assertEqual(reopened.run_status, RunStatus.RUNNING)
+
 
 if __name__ == "__main__":
     unittest.main()

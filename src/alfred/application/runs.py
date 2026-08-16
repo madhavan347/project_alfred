@@ -213,6 +213,61 @@ class RunService:
         self.tasks.record(task, "RUN_STOPPED", note, actor=actor)
         return run
 
+    def record_event(
+        self,
+        task_number: int,
+        event_type: str,
+        note: str = "",
+        *,
+        actor: str,
+        override_actor: bool = False,
+    ) -> Task:
+        """Apply one supported agent lifecycle event."""
+        task = self.tasks.require(task_number)
+        self._require_actor(task, actor, override_actor)
+        normalized = event_type.strip().lower()
+        if normalized == "plan_approved":
+            self.continue_execution(task_number, note or "Plan approved.", actor=actor)
+            return self.tasks.require(task_number)
+        if normalized == "blocked":
+            return self.tasks.block(task_number, note or "Agent reported a blocker.", actor=actor)
+        if normalized == "unblocked":
+            return self.tasks.progress(task_number, note or "Agent resumed execution.", actor=actor)
+        if normalized == "review_requested":
+            task.status = TaskStatus.IN_REVIEW
+        elif normalized in {"progress", "coding", "execution_started", "fixing"}:
+            task.status = TaskStatus.IN_PROGRESS
+        elif normalized == "plan_completed":
+            if task.planning_state != PlanningState.STARTED:
+                raise ValueError(f"Task {task_number} has no active planning phase")
+        else:
+            raise ValueError(f"Unsupported run event: {event_type}")
+        return self.tasks.record(
+            task,
+            f"AGENT_{normalized.upper()}",
+            note or normalized.replace("_", " ").title(),
+            actor=actor,
+        )
+
+    def reopen(self, task_number: int, *, actor: str = "manager") -> AgentRun:
+        """Start a new execution attempt after a previous run reached a terminal state."""
+        task = self.tasks.require(task_number)
+        if any(
+            run.run_status in {RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.BLOCKED}
+            for run in self.list(task_number)
+        ):
+            raise ValueError(f"Task {task_number} already has an active run")
+        if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
+            task.planning_state = PlanningState.COMPLETED
+        return self.trigger((task_number,), actor=actor)[0]
+
+    def active(self, task_number: int) -> AgentRun | None:
+        """Return the latest active run for a task when one exists."""
+        try:
+            return self._latest_active(task_number)
+        except ValueError:
+            return None
+
     def session_names(self) -> tuple[str, ...]:
         """Return sessions owned by this Alfred instance."""
         return self.sessions.list()
