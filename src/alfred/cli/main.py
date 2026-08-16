@@ -8,6 +8,7 @@ from alfred.cli.parser import build_parser
 from alfred.cli.run_commands import handle_run, handle_worktree
 from alfred.cli.support_commands import (
     handle_knowledge,
+    handle_migration,
     handle_notifications,
     handle_report,
     handle_sync,
@@ -38,6 +39,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "notifications": handle_notifications,
         "coordinator": handle_coordinator,
         "learner": handle_learner,
+        "migrate": handle_migration,
     }
     if args.resource in handlers:
         try:

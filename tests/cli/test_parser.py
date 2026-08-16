@@ -19,6 +19,7 @@ class ParserTests(unittest.TestCase):
             "coordinator": ("coordinator", "status"),
             "learner": ("learner", "status"),
             "notifications": ("notifications",),
+            "migrate": ("migrate", "--source", "/tmp/legacy"),
         }
         for resource, arguments in commands.items():
             with self.subTest(resource=resource):

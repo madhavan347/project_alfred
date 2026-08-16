@@ -34,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     _coordinator_parser(resources)
     _learner_parser(resources)
     _notification_parser(resources)
+    migration = resources.add_parser("migrate", help="migrate legacy JSON runtime state")
+    migration.add_argument("--source", type=Path, required=True)
+    migration.add_argument("--migration-directory", type=Path)
     return parser
 
 

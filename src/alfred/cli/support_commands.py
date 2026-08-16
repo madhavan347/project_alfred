@@ -4,6 +4,7 @@ import argparse
 
 from alfred.application.reports import dependencies, risks, today, velocity
 from alfred.bootstrap import AlfredServices
+from alfred.config.migration import migrate_legacy_runtime
 
 
 def handle_sync(args: argparse.Namespace, services: AlfredServices) -> int:
@@ -97,6 +98,28 @@ def handle_notifications(args: argparse.Namespace, services: AlfredServices) -> 
             f"[{notification.notification_type}] Task {notification.task_number} — "
             f"{summary} ({notification.created_at})"
         )
+    return 0
+
+
+def handle_migration(args: argparse.Namespace, services: AlfredServices) -> int:
+    """Migrate legacy JSON state after creating an immutable local backup."""
+    directory = args.migration_directory or (
+        services.config.runtime.state_directory.parent / "migrations"
+    )
+    result = migrate_legacy_runtime(
+        args.source,
+        services.store,
+        directory,
+    )
+    state = "already migrated" if result.already_migrated else "migrated"
+    print(
+        f"Legacy runtime {state}: tasks={result.tasks} runs={result.runs} "
+        f"queued={result.queued_tasks}"
+    )
+    print(f"Backup: {result.backup_directory}")
+    print(f"Marker: {result.marker_path}")
+    if result.agent_fragment is not None:
+        print(f"Review agent configuration: {result.agent_fragment}")
     return 0
 
 
