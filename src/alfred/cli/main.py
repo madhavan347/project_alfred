@@ -1,31 +1,9 @@
 """Top-level Alfred command-line entry point."""
 
-import argparse
 from collections.abc import Sequence
-from pathlib import Path
 
-from alfred import __version__
+from alfred.cli.parser import build_parser
 from alfred.config.initializer import initialize_workspace
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Create the root parser without performing filesystem work."""
-    parser = argparse.ArgumentParser(
-        prog="alfred",
-        description="Coordinate local tasks, agents, and Git worktrees.",
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        help="path to .alfred/config.toml (overrides ALFRED_CONFIG and discovery)",
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    subparsers = parser.add_subparsers(dest="resource")
-
-    init_parser = subparsers.add_parser("init", help="initialize an Alfred workspace")
-    init_parser.add_argument("--root", type=Path, default=Path.cwd())
-    init_parser.add_argument("--force", action="store_true")
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
