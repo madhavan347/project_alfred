@@ -28,6 +28,28 @@ class CompletionFileStoreTests(unittest.TestCase):
             self.assertFalse(path.exists())
             self.assertTrue(destination.is_file())
 
+    def test_repeated_completions_keep_every_archived_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = CompletionFileStore(Path(directory))
+            archived = []
+            for summary in ("First attempt", "Second attempt", "Third attempt"):
+                report = CompletionReport(
+                    task_number=7,
+                    agent="builder",
+                    status=CompletionStatus.SUCCESS,
+                    summary=summary,
+                )
+                archived.append(store.mark_processed(store.write(report)))
+            self.assertEqual(
+                [path.name for path in archived],
+                ["task-7.json", "task-7-2.json", "task-7-3.json"],
+            )
+            self.assertEqual(
+                [store.read(path).summary for path in archived],
+                ["First attempt", "Second attempt", "Third attempt"],
+            )
+            self.assertEqual(store.pending(), ())
+
     def test_legacy_failure_is_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = CompletionFileStore(Path(directory))

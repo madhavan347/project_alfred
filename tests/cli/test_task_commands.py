@@ -25,6 +25,13 @@ class TaskCommandTests(unittest.TestCase):
             code = main(("--config", str(self.config), *arguments))
         return code, output.getvalue()
 
+    def test_key_errors_print_without_repr_quotes(self) -> None:
+        text = self.config.read_text().replace('timezone = "UTC"', 'timezone = "Mars/Base"')
+        self.config.write_text(text)
+        code, output = self.call("report", "velocity")
+        self.assertEqual(code, 1)
+        self.assertEqual(output, "ERROR: No time zone found with key Mars/Base\n")
+
     def test_create_update_and_start_task(self) -> None:
         code, output = self.call(
             "task",

@@ -93,11 +93,26 @@ def handle_notifications(args: argparse.Namespace, services: AlfredServices) -> 
     if not pending:
         print("No pending notifications")
     for notification in pending:
-        summary = notification.details.get("summary") or notification.details.get("message", "")
+        details = notification.details
+        summary = details.get("summary") or details.get("message", "")
         print(
             f"[{notification.notification_type}] Task {notification.task_number} — "
             f"{summary} ({notification.created_at})"
         )
+        context = [
+            f"{label}={value}"
+            for label, value in (
+                ("status", details.get("status", "")),
+                ("agent", details.get("agent", "")),
+                ("repositories", ",".join(details.get("repositories", ()))),
+                ("session", details.get("session_name", "")),
+            )
+            if value
+        ]
+        if context:
+            print(f"  {' '.join(context)}")
+        for issue in details.get("validation_issues", ()):
+            print(f"  VALIDATION: {issue}")
     return 0
 
 

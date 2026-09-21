@@ -45,7 +45,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             services = build_services(config_path=args.config)
             return handlers[args.resource](args, services)
-        except (OSError, RuntimeError, ValueError, KeyError) as exc:
+        except KeyError as exc:
+            print(f"ERROR: {exc.args[0] if exc.args else exc}")
+            return 1
+        except (OSError, RuntimeError, ValueError) as exc:
             print(f"ERROR: {exc}")
             return 1
     if args.resource is None:

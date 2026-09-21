@@ -39,14 +39,20 @@ class CompletionFileStore:
 
     def mark_processed(self, path: Path) -> Path:
         """Move a processed report out of the pending queue."""
-        self.processed_directory.mkdir(parents=True, exist_ok=True)
-        destination = self.processed_directory / path.name
-        path.replace(destination)
-        return destination
+        return _archive(path, self.processed_directory)
 
     def mark_invalid(self, path: Path) -> Path:
         """Quarantine a malformed report so polling does not repeat forever."""
-        self.invalid_directory.mkdir(parents=True, exist_ok=True)
-        destination = self.invalid_directory / path.name
-        path.replace(destination)
-        return destination
+        return _archive(path, self.invalid_directory)
+
+
+def _archive(path: Path, directory: Path) -> Path:
+    """Move a report into an archive directory without replacing an earlier report."""
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / path.name
+    attempt = 2
+    while destination.exists():
+        destination = directory / f"{path.stem}-{attempt}{path.suffix}"
+        attempt += 1
+    path.replace(destination)
+    return destination

@@ -206,7 +206,7 @@ class RunServiceTests(unittest.TestCase):
     def test_complete_checks_actor_and_writes_report(self) -> None:
         self.add_task()
         self.service.trigger((7,))
-        with self.assertRaisesRegex(PermissionError, "agent:builder"):
+        with self.assertRaisesRegex(PermissionError, "run updates require actor 'agent:builder'"):
             self.service.complete(7, "success", "Done", actor="manager")
         report = self.service.complete(7, "success", "Done", actor="agent:builder")
         self.assertEqual(report.status, CompletionStatus.SUCCESS)

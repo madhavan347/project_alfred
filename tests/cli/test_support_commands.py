@@ -60,6 +60,25 @@ class SupportCommandTests(unittest.TestCase):
         )[1]
         self.assertIn("Ready for review", output)
 
+    def test_notifications_show_context_and_validation_issues(self) -> None:
+        notification = Notification(
+            "notice-2",
+            "task_completed",
+            7,
+            "2026-08-16T10:30:00+00:00",
+            {
+                "summary": "Ready for review",
+                "status": "success",
+                "agent": "builder",
+                "repositories": ["api", "web"],
+                "validation_issues": ["knowledge_entries must be at least 1; got 0"],
+            },
+        )
+        services = SimpleNamespace(notifications=SimpleNamespace(pending=lambda: (notification,)))
+        output = self.output(handle_notifications, Namespace(action=None), services)[1]
+        self.assertIn("  status=success agent=builder repositories=api,web\n", output)
+        self.assertIn("  VALIDATION: knowledge_entries must be at least 1; got 0", output)
+
     def test_sync_apply_and_success(self) -> None:
         applied: list[int] = []
         tasks = (Task(1, "One", "Details"), Task(2, "Two", "Details"))

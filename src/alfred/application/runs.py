@@ -340,4 +340,7 @@ class RunService:
     def _require_actor(task: Task, actor: str, override: bool) -> None:
         expected = f"agent:{task.assigned_agent_alias}"
         if not override and actor != expected:
-            raise PermissionError(f"Task {task.task_number} completion requires actor {expected!r}")
+            raise PermissionError(
+                f"Task {task.task_number} run updates require actor {expected!r}; "
+                "a manager may pass --override-manager"
+            )

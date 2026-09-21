@@ -14,21 +14,26 @@ class VelocityReport:
     total: int
 
 
+TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED})
+
+
 def today(tasks: tuple[Task, ...]) -> tuple[Task, ...]:
     """Return active tasks in task-number order."""
-    terminal = {TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED}
-    return tuple(sorted((task for task in tasks if task.status not in terminal), key=_number))
+    return tuple(
+        sorted((task for task in tasks if task.status not in TERMINAL_STATUSES), key=_number)
+    )
 
 
 def risks(tasks: tuple[Task, ...]) -> tuple[Task, ...]:
-    """Return blocked, held, or high-priority tasks."""
+    """Return active blocked, held, or high-priority tasks."""
     risky_statuses = {TaskStatus.BLOCKED, TaskStatus.ON_HOLD}
     return tuple(
         sorted(
             (
                 task
                 for task in tasks
-                if task.status in risky_statuses or task.priority in {"P0", "P1"}
+                if task.status not in TERMINAL_STATUSES
+                and (task.status in risky_statuses or task.priority in {"P0", "P1"})
             ),
             key=lambda task: (task.priority, task.task_number),
         )
@@ -42,9 +47,7 @@ def dependencies(tasks: tuple[Task, ...]) -> tuple[Task, ...]:
 
 def velocity(tasks: tuple[Task, ...]) -> VelocityReport:
     """Count tasks in a completed or consolidated terminal state."""
-    completed = sum(
-        task.status in {TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED} for task in tasks
-    )
+    completed = sum(task.status in TERMINAL_STATUSES for task in tasks)
     return VelocityReport(completed=completed, total=len(tasks))
 
 

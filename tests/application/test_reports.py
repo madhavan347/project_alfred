@@ -27,6 +27,14 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(velocity(tasks).completed, 1)
         self.assertEqual(velocity(tasks).total, 3)
 
+    def test_risk_report_omits_finished_high_priority_tasks(self) -> None:
+        tasks = (
+            task(1, priority="P0", status=TaskStatus.COMPLETED),
+            task(2, priority="P1", status=TaskStatus.CONSOLIDATED),
+            task(3, priority="P1", status=TaskStatus.IN_PROGRESS),
+        )
+        self.assertEqual([item.task_number for item in risks(tasks)], [3])
+
 
 if __name__ == "__main__":
     unittest.main()
