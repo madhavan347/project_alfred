@@ -58,7 +58,13 @@ def build_services(
     )
     runner = SubprocessRunner()
     sessions = TmuxSessionBackend(runner)
-    tasks = TaskService(store, tracker, clock, agent_aliases=config.agents)
+    tasks = TaskService(
+        store,
+        tracker,
+        clock,
+        agent_aliases=config.agents,
+        repository_names=(repository.name for repository in config.workspace.repositories),
+    )
     worktrees = GitWorktreeManager(
         config.workspace,
         config.runtime.worktree_directory,

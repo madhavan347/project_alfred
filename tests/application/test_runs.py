@@ -69,6 +69,7 @@ class RecordingWorktrees:
         self.root = root
         self.created = 0
         self.cleaned = 0
+        self.changes = ""
 
     def create(self, task: Task, repositories=None) -> dict[str, Path]:
         self.created += 1
@@ -80,7 +81,7 @@ class RecordingWorktrees:
                 repository="app",
                 path=self.root / f"task-{task_number}/app",
                 branch="feature/example",
-                changes="",
+                changes=self.changes,
             ),
         )
 
@@ -180,6 +181,31 @@ class RunServiceTests(unittest.TestCase):
         self.assertIn("Approved; also cover the empty-key case", prompt_file.read_text())
         self.assertEqual(self.tasks.require(7).notes, "Approved; also cover the empty-key case")
 
+    def test_undispatchable_task_is_rejected_before_creating_worktrees(self) -> None:
+        self.add_task()
+        strict = AlfredConfig(
+            config_path=self.config.config_path,
+            workspace=self.config.workspace,
+            runtime=RuntimeConfig(
+                state_directory=self.root / "state",
+                temp_directory=self.root / "temp",
+                tmux_unavailable_policy="error",
+            ),
+            agents=self.config.agents,
+        )
+        self.service.dispatcher = AgentDispatcher(strict, self.sessions)
+        self.sessions.is_available = False
+        with self.assertRaisesRegex(RuntimeError, "session backend is unavailable"):
+            self.service.trigger((7,))
+        self.sessions.is_available = True
+        stored = self.store.tasks()
+        stored[0]["assigned_agent_alias"] = "ghost"  # agent removed from config after assignment
+        self.store.save_tasks(stored)
+        with self.assertRaisesRegex(ValueError, "Unknown agent 'ghost'"):
+            self.service.trigger((7,))
+        self.assertEqual(self.worktrees.created, 0)
+        self.assertEqual(self.service.list(7), ())
+
     def test_queue_fallback_persists_task_and_run(self) -> None:
         self.sessions.is_available = False
         self.add_task()
@@ -242,6 +268,30 @@ class RunServiceTests(unittest.TestCase):
         reopened = self.service.reopen(7)
         self.assertNotEqual(reopened.run_id, first.run_id)
         self.assertEqual(reopened.run_status, RunStatus.RUNNING)
+
+    def test_dirty_cleanup_fails_before_stopping_the_session(self) -> None:
+        self.add_task()
+        run = self.service.trigger((7,))[0]
+        self.worktrees.changes = "?? notes.txt"
+        with self.assertRaisesRegex(ValueError, "uncommitted changes: app; commit them"):
+            self.service.stop(7, cleanup=True)
+        self.assertIn(run.session_name, self.sessions.names)
+        self.assertEqual(self.worktrees.cleaned, 0)
+        self.assertEqual(self.service.list(7)[-1].run_status, RunStatus.RUNNING)
+        stopped = self.service.stop(7, cleanup=True, force=True)
+        self.assertEqual(stopped.run_status, RunStatus.STOPPED)
+        self.assertEqual(self.worktrees.cleaned, 1)
+
+    def test_stopped_plan_task_reopens_in_execution_with_worktrees(self) -> None:
+        self.add_task(planned=True)
+        self.service.trigger((7,))
+        self.service.continue_execution(7)
+        self.service.stop(7)
+        self.assertEqual(self.tasks.require(7).planning_state, PlanningState.PENDING)
+        reopened = self.service.reopen(7)
+        self.assertEqual(reopened.phase, "execution")
+        self.assertEqual(self.worktrees.created, 2)
+        self.assertEqual(self.tasks.require(7).planning_state, PlanningState.COMPLETED)
 
     def test_session_names_are_limited_to_the_configured_prefix(self) -> None:
         self.sessions.names.update({"alfred-task-7-builder", "unrelated-session"})

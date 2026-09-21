@@ -27,11 +27,13 @@ class TaskService:
         clock: Clock,
         *,
         agent_aliases: Iterable[str] = (),
+        repository_names: Iterable[str] = (),
     ) -> None:
         self.store = store
         self.tracker = tracker
         self.clock = clock
         self.agent_aliases = frozenset(agent_aliases)
+        self.repository_names = frozenset(repository_names)
 
     def list(self) -> tuple[Task, ...]:
         """Return tasks ordered by task number."""
@@ -56,18 +58,44 @@ class TaskService:
     def upsert(self, task: Task, *, actor: str = "manager") -> Task:
         """Create or replace complete task details with compatible defaults."""
         existing = self.get(task.task_number)
+        self._require_configured(task, existing)
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             if task.planning_state == PlanningState.NOT_REQUIRED:
                 task.planning_state = PlanningState.PENDING
         else:
             task.planning_state = PlanningState.NOT_REQUIRED
-        if task.dispatch_mode == DispatchMode.QUEUED:
+        if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:
+            # Only work that has not started becomes eligible for `run trigger --all`.
             task.status = TaskStatus.QUEUED
         timestamp = self.clock.timestamp()
         task.created_at = existing.created_at if existing else timestamp
         task.updated_at = timestamp
         require_valid_task(task)
         return self._commit(task, actor, "TASK_UPSERTED", "Task details created or updated.")
+
+    def _require_configured(self, task: Task, existing: Task | None) -> None:
+        """Reject newly supplied agent aliases or repositories that are not configured."""
+        alias = task.assigned_agent_alias
+        if (
+            alias
+            and self.agent_aliases
+            and alias not in self.agent_aliases
+            and (existing is None or alias != existing.assigned_agent_alias)
+        ):
+            available = ", ".join(sorted(self.agent_aliases))
+            raise ValueError(f"Unknown agent {alias!r}; configured agents: {available}")
+        previous = set(existing.target_repositories) if existing else set()
+        unknown = [
+            name
+            for name in task.target_repositories
+            if self.repository_names and name not in self.repository_names and name not in previous
+        ]
+        if unknown:
+            available = ", ".join(sorted(self.repository_names))
+            raise ValueError(
+                f"Unknown repository {', '.join(map(repr, unknown))}; "
+                f"configured repositories: {available}"
+            )
 
     def assign(
         self,
@@ -86,7 +114,7 @@ class TaskService:
         task.assigned_agent_alias = agent_alias
         if dispatch_mode is not None:
             task.dispatch_mode = dispatch_mode
-        if task.dispatch_mode == DispatchMode.QUEUED:
+        if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:
             task.status = TaskStatus.QUEUED
         task.updated_at = self.clock.timestamp()
         return self._commit(

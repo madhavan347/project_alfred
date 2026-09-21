@@ -61,6 +61,25 @@ class GitWorktreeManagerTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(self.manager.statuses(7)[0].branch, "feature/task-7")
 
+    def _commit(self, cwd: Path, name: str) -> None:
+        cwd.joinpath(name).write_text(f"{name}\n")
+        self.runner.run(("git", "add", name), cwd=cwd)
+        self.runner.run(
+            ("git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid")
+            + ("commit", "-m", name),
+            cwd=cwd,
+        )
+
+    def test_diverged_branch_is_rejected_without_leaving_directories(self) -> None:
+        self.runner.run(("git", "branch", "feature/task-7"), cwd=self.repository)
+        self._commit(self.repository, "main.txt")
+        self.runner.run(("git", "checkout", "-q", "feature/task-7"), cwd=self.repository)
+        self._commit(self.repository, "branch.txt")
+        self.runner.run(("git", "checkout", "-q", "main"), cwd=self.repository)
+        with self.assertRaisesRegex(ValueError, "has diverged from 'main'"):
+            self.manager.create(self.task)
+        self.assertFalse((self.root / "worktrees" / "task-7").exists())
+
     def test_cleanup_unregisters_clean_worktree(self) -> None:
         path = self.manager.create(self.task)["api"]
         self.assertEqual(self.manager.cleanup(7), (path,))

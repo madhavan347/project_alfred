@@ -156,6 +156,13 @@ class AgentDispatcher:
             self.sessions.send_prompt(session_name, prompt_file)
         return DispatchOutcome(session_name, prompt_file, preview, True, reused, False)
 
+    def preflight(self, task: Task, phase: PromptPhase) -> None:
+        """Reject a dispatch that cannot start before any worktree is created."""
+        agent = self._agent(task.assigned_agent_alias)
+        _render_command(agent, task, phase, self.config.workspace.root, "", Path())
+        if self.config.runtime.tmux_unavailable_policy != "queue" and not self.sessions.available():
+            raise RuntimeError("The configured session backend is unavailable")
+
     def _agent(self, alias: str) -> AgentConfig:
         if not alias:
             raise ValueError("Task must be assigned to an agent before dispatch")

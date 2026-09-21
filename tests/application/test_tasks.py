@@ -34,6 +34,7 @@ class TaskServiceTests(unittest.TestCase):
             DisabledTracker(),
             FixedClock(ZoneInfo("UTC")),
             agent_aliases=("builder", "reviewer"),
+            repository_names=("api", "web"),
         )
 
     def tearDown(self) -> None:
@@ -63,6 +64,40 @@ class TaskServiceTests(unittest.TestCase):
         assigned = self.service.assign(7, "builder")
         self.assertEqual(assigned.status, TaskStatus.QUEUED)
         self.assertEqual(assigned.assigned_agent_alias, "builder")
+
+    def test_reassignment_and_update_keep_started_and_terminal_status(self) -> None:
+        for status in (TaskStatus.RUNNING, TaskStatus.CONSOLIDATED):
+            with self.subTest(status=status):
+                task = self.task()
+                task.dispatch_mode = DispatchMode.QUEUED
+                task.status = status
+                self.service.upsert(task)
+                assigned = self.service.assign(7, "builder")
+                self.assertEqual(assigned.status, status)
+                updated = self.service.require(7)
+                updated.title = "Renamed"
+                self.assertEqual(self.service.upsert(updated).status, status)
+
+    def test_upsert_rejects_unconfigured_agent_and_repository(self) -> None:
+        task = self.task()
+        task.assigned_agent_alias = "ghost"
+        with self.assertRaisesRegex(ValueError, "Unknown agent 'ghost'; configured agents"):
+            self.service.upsert(task)
+        task = self.task()
+        task.target_repositories = ["api", "nope"]
+        with self.assertRaisesRegex(ValueError, "Unknown repository 'nope'; configured"):
+            self.service.upsert(task)
+        self.assertIsNone(self.service.get(7))
+
+    def test_upsert_keeps_previously_stored_values_editable(self) -> None:
+        self.service.upsert(self.task())
+        stored = self.store.tasks()
+        stored[0]["assigned_agent_alias"] = "retired"
+        stored[0]["target_repositories"] = ["archived"]
+        self.store.save_tasks(stored)
+        task = self.service.require(7)
+        task.title = "Renamed"
+        self.assertEqual(self.service.upsert(task).title, "Renamed")
 
     def test_progress_block_unblock_and_review(self) -> None:
         self.service.upsert(self.task())

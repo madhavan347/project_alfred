@@ -58,7 +58,6 @@ class GitWorktreeManager:
                 created[name] = target
                 continue
 
-            target.parent.mkdir(parents=True, exist_ok=True)
             if self._branch_exists(repository.path, task.branch_name):
                 self._ensure_not_diverged(
                     repository.path, repository.default_branch, task.branch_name
@@ -84,6 +83,7 @@ class GitWorktreeManager:
                     str(target),
                     repository.default_branch,
                 )
+            target.parent.mkdir(parents=True, exist_ok=True)
             self.runner.run(arguments, cwd=repository.path)
             created[name] = target
         return created

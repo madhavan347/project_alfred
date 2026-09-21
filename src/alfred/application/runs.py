@@ -83,26 +83,10 @@ class RunService:
         """Dispatch up to ``parallel`` tasks in the supplied order."""
         if parallel < 1:
             raise ValueError("parallel must be at least 1")
-        started: list[AgentRun] = []
-        for task_number in tuple(dict.fromkeys(task_numbers))[:parallel]:
-            task = self.tasks.require(task_number)
-            phase = self._initial_phase(task)
-            paths = self.worktrees.create(task) if phase == PromptPhase.EXECUTION else {}
-            outcome = self.dispatcher.dispatch(task, phase, paths)
-            run = self._new_run(task, phase, paths, outcome)
-            self._save_run(run)
-            self._update_queue(task.task_number, add=outcome.queued)
-            task.status = TaskStatus.QUEUED if outcome.queued else TaskStatus.RUNNING
-            if phase == PromptPhase.PLAN:
-                task.planning_state = PlanningState.STARTED
-            self.tasks.record(
-                task,
-                "RUN_QUEUED" if outcome.queued else "RUN_STARTED",
-                f"{phase.value.title()} phase dispatched to {task.assigned_agent_alias}.",
-                actor=actor,
-            )
-            started.append(run)
-        return tuple(started)
+        return tuple(
+            self._start(self.tasks.require(task_number), actor)
+            for task_number in tuple(dict.fromkeys(task_numbers))[:parallel]
+        )
 
     def continue_execution(
         self,
@@ -118,6 +102,7 @@ class RunService:
         if task.planning_state != PlanningState.STARTED:
             raise ValueError(f"Task {task_number} has no plan awaiting approval")
         run = self._latest_active(task_number)
+        self.dispatcher.preflight(task, PromptPhase.EXECUTION)
         task.planning_state = PlanningState.APPROVED
         task.notes = note
         paths = self.worktrees.create(task)
@@ -196,6 +181,17 @@ class RunService:
         """Stop a live run and optionally remove its worktrees."""
         task = self.tasks.require(task_number)
         run = self._latest_active(task_number)
+        if cleanup and not force:
+            dirty = [
+                status.repository
+                for status in self.worktrees.statuses(task_number)
+                if status.changes.strip()
+            ]
+            if dirty:
+                raise ValueError(
+                    f"Task {task_number} worktrees have uncommitted changes: "
+                    f"{', '.join(dirty)}; commit them or pass --force to discard them"
+                )
         if (
             run.session_name
             and run.session_status == "active"
@@ -264,7 +260,7 @@ class RunService:
             raise ValueError(f"Task {task_number} already has an active run")
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             task.planning_state = PlanningState.COMPLETED
-        return self.trigger((task_number,), actor=actor)[0]
+        return self._start(task, actor)
 
     def active(self, task_number: int) -> AgentRun | None:
         """Return the latest active run for a task when one exists."""
@@ -276,6 +272,26 @@ class RunService:
     def session_names(self) -> tuple[str, ...]:
         """Return sessions owned by this Alfred instance."""
         return self.sessions.list(self.dispatcher.config.runtime.session_prefix)
+
+    def _start(self, task: Task, actor: str) -> AgentRun:
+        """Dispatch one task's initial phase and persist the new run."""
+        phase = self._initial_phase(task)
+        self.dispatcher.preflight(task, phase)
+        paths = self.worktrees.create(task) if phase == PromptPhase.EXECUTION else {}
+        outcome = self.dispatcher.dispatch(task, phase, paths)
+        run = self._new_run(task, phase, paths, outcome)
+        self._save_run(run)
+        self._update_queue(task.task_number, add=outcome.queued)
+        task.status = TaskStatus.QUEUED if outcome.queued else TaskStatus.RUNNING
+        if phase == PromptPhase.PLAN:
+            task.planning_state = PlanningState.STARTED
+        self.tasks.record(
+            task,
+            "RUN_QUEUED" if outcome.queued else "RUN_STARTED",
+            f"{phase.value.title()} phase dispatched to {task.assigned_agent_alias}.",
+            actor=actor,
+        )
+        return run
 
     def _initial_phase(self, task: Task) -> PromptPhase:
         if not task.assigned_agent_alias:
