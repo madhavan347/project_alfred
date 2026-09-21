@@ -76,6 +76,38 @@ class LearnerServiceTests(unittest.TestCase):
         self.assertTrue(self.service.stop())
         self.assertFalse(self.service.status().running)
 
+    def _learner_with_direct(self, *direct: str) -> LearnerService:
+        agent = AgentConfig(
+            alias="learner",
+            runtime_target="local",
+            commands=CommandConfig(direct=direct, plan=("agent-cli",), execution=("agent-cli",)),
+        )
+        config = AlfredConfig(
+            config_path=self.config.config_path,
+            workspace=self.config.workspace,
+            runtime=self.config.runtime,
+            agents=MappingProxyType({"learner": agent}),
+            knowledge=self.config.knowledge,
+        )
+        return LearnerService(config, self.sessions)
+
+    def test_prompt_placeholder_starts_learner_without_pasting(self) -> None:
+        self.assertTrue(self._learner_with_direct("agent-cli", "{prompt}").start("learner"))
+        command = self.sessions.created[0][2]
+        self.assertIn("# Alfred Knowledge Learner", command[-1])
+        self.assertIsNone(self.sessions.prompt_file)
+
+    def test_direct_command_without_prompt_placeholder_stays_verbatim(self) -> None:
+        self.assertTrue(self._learner_with_direct("agent-cli", "{literal}").start("learner"))
+        self.assertEqual(self.sessions.created[0][2], ("agent-cli", "{literal}"))
+        self.assertIsNotNone(self.sessions.prompt_file)
+
+    def test_task_placeholders_are_rejected_beside_prompt(self) -> None:
+        service = self._learner_with_direct("agent-cli", "{prompt}", "{task_number}")
+        with self.assertRaisesRegex(ValueError, "only {prompt} and {prompt_file}: task_number"):
+            service.start("learner")
+        self.assertEqual(self.sessions.created, [])
+
     def test_unknown_agent_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "configured agents: learner"):
             self.service.start("missing")

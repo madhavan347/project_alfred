@@ -57,8 +57,21 @@ class TmuxSessionBackendTests(unittest.TestCase):
             backend = TmuxSessionBackend(runner, executable_finder=lambda _: "/usr/bin/tmux")
             backend.send_prompt("alfred-task-7", prompt)
             self.assertEqual(
-                [call[0][1] for call in runner.calls],
-                ["load-buffer", "paste-buffer", "send-keys"],
+                [call[0] for call in runner.calls],
+                [
+                    ("tmux", "load-buffer", "-b", "alfred-prompt-alfred-task-7", str(prompt)),
+                    (
+                        "tmux",
+                        "paste-buffer",
+                        "-p",
+                        "-d",
+                        "-b",
+                        "alfred-prompt-alfred-task-7",
+                        "-t",
+                        "alfred-task-7",
+                    ),
+                    ("tmux", "send-keys", "-t", "alfred-task-7", "Enter"),
+                ],
             )
 
     def test_list_filters_prefix_and_handles_missing_server(self) -> None:

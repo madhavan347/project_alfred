@@ -109,6 +109,46 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertEqual(sessions.created, [])
         self.assertEqual(len(sessions.prompts), 1)
 
+    def _with_execution(self, *execution: str) -> AlfredConfig:
+        agent = self.config.agents["builder"]
+        replaced = AgentConfig(
+            alias=agent.alias,
+            runtime_target=agent.runtime_target,
+            commands=CommandConfig(
+                direct=agent.commands.direct,
+                plan=agent.commands.plan,
+                execution=execution,
+            ),
+        )
+        return AlfredConfig(
+            config_path=self.config.config_path,
+            workspace=self.config.workspace,
+            runtime=self.config.runtime,
+            agents=MappingProxyType({"builder": replaced}),
+        )
+
+    def test_prompt_placeholder_delivers_prompt_at_startup_without_pasting(self) -> None:
+        sessions = RecordingSessions()
+        config = self._with_execution("agent-cli", "{prompt}")
+        outcome = AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-1], outcome.prompt_file.read_text())
+        self.assertEqual(sessions.prompts, [])
+        self.assertEqual(outcome.command_preview, "agent-cli '<prompt>'")
+
+    def test_prompt_file_placeholder_renders_path_without_pasting(self) -> None:
+        sessions = RecordingSessions()
+        config = self._with_execution("agent-cli", "--prompt-file={prompt_file}")
+        outcome = AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-1], f"--prompt-file={outcome.prompt_file}")
+        self.assertEqual(sessions.prompts, [])
+
+    def test_reused_session_is_pasted_even_with_prompt_placeholder(self) -> None:
+        sessions = RecordingSessions(existing=True)
+        config = self._with_execution("agent-cli", "{prompt}")
+        AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created, [])
+        self.assertEqual(len(sessions.prompts), 1)
+
     def test_unavailable_backend_queues_without_creating_session(self) -> None:
         sessions = RecordingSessions(available=False)
         outcome = AgentDispatcher(self.config, sessions).dispatch(self.task, PromptPhase.PLAN, {})

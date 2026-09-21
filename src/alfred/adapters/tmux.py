@@ -60,13 +60,19 @@ class TmuxSessionBackend:
         )
 
     def send_prompt(self, name: str, prompt_file: Path) -> None:
-        """Load a prompt into tmux's buffer, paste it, and press Enter."""
+        """Bracket-paste a prompt through a session-private buffer and press Enter.
+
+        Bracketed paste lets interactive agents treat the prompt as one paste so the
+        following Enter submits it instead of being absorbed as a newline, and the
+        per-session buffer keeps concurrent dispatches from pasting each other's prompts.
+        """
         self._require_available()
         _validate_name(name)
         if not prompt_file.is_file():
             raise ValueError(f"Prompt file does not exist: {prompt_file}")
-        self.runner.run(("tmux", "load-buffer", str(prompt_file)))
-        self.runner.run(("tmux", "paste-buffer", "-t", name))
+        buffer = f"alfred-prompt-{name}"
+        self.runner.run(("tmux", "load-buffer", "-b", buffer, str(prompt_file)))
+        self.runner.run(("tmux", "paste-buffer", "-p", "-d", "-b", buffer, "-t", name))
         self.runner.run(("tmux", "send-keys", "-t", name, "Enter"))
 
     def stop(self, name: str) -> None:

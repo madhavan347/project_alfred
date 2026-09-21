@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from alfred.application.dispatch import render_learner_command
 from alfred.config.models import AlfredConfig
 from alfred.ports.session import SessionBackend
 from alfred.utils.files import atomic_write_text
@@ -37,14 +38,15 @@ class LearnerService:
         if self.sessions.exists(self.SESSION_NAME):
             return False
 
+        prompt = self._prompt()
         prompt_file = self.config.runtime.temp_directory / "prompts" / "learner.md"
-        atomic_write_text(prompt_file, self._prompt())
-        self.sessions.create(
-            self.SESSION_NAME,
-            self.config.workspace.root,
-            agent.commands.direct,
+        command, delivers_prompt = render_learner_command(
+            agent.commands.direct, prompt, prompt_file
         )
-        self.sessions.send_prompt(self.SESSION_NAME, prompt_file)
+        atomic_write_text(prompt_file, prompt)
+        self.sessions.create(self.SESSION_NAME, self.config.workspace.root, command)
+        if not delivers_prompt:
+            self.sessions.send_prompt(self.SESSION_NAME, prompt_file)
         atomic_write_text(self.marker, f"{agent_alias}\n")
         return True
 

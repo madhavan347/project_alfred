@@ -1,8 +1,10 @@
 """Configuration-driven prompt construction and interactive dispatch."""
 
 import shlex
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from string import Formatter
 
 from alfred.config.models import AgentConfig, AlfredConfig
 from alfred.domain.constants import PromptPhase
@@ -121,14 +123,11 @@ class AgentDispatcher:
         """Start or reuse a task session, or queue when configured to do so."""
         agent = self._agent(task.assigned_agent_alias)
         workdir = next(iter(worktree_paths.values()), self.config.workspace.root)
-        command = _render_command(agent, task, phase, workdir)
-        prompt_file = self.prompts.write(
-            task.task_number,
-            phase,
-            self.builder.build(task, phase, worktree_paths),
-        )
+        prompt = self.builder.build(task, phase, worktree_paths)
+        prompt_file = self.prompts.write(task.task_number, phase, prompt)
+        command = _render_command(agent, task, phase, workdir, prompt, prompt_file)
         session_name = f"{self.config.runtime.session_prefix}-{task.task_number}-{agent.alias}"
-        preview = shlex.join(command)
+        preview = shlex.join(_render_command(agent, task, phase, workdir, "<prompt>", prompt_file))
         if not self.sessions.available():
             if self.config.runtime.tmux_unavailable_policy == "queue":
                 return DispatchOutcome(session_name, prompt_file, preview, False, False, True)
@@ -137,7 +136,8 @@ class AgentDispatcher:
         reused = self.sessions.exists(session_name)
         if not reused:
             self.sessions.create(session_name, workdir, command)
-        self.sessions.send_prompt(session_name, prompt_file)
+        if reused or not _delivers_prompt(_template(agent, phase)):
+            self.sessions.send_prompt(session_name, prompt_file)
         return DispatchOutcome(session_name, prompt_file, preview, True, reused, False)
 
     def _agent(self, alias: str) -> AgentConfig:
@@ -150,22 +150,62 @@ class AgentDispatcher:
         return agent
 
 
+PROMPT_PLACEHOLDERS = frozenset({"prompt", "prompt_file"})
+
+
+def _template(agent: AgentConfig, phase: PromptPhase) -> tuple[str, ...]:
+    return agent.commands.plan if phase == PromptPhase.PLAN else agent.commands.execution
+
+
+def _delivers_prompt(template: Sequence[str]) -> bool:
+    """Return whether a command template passes the prompt to the agent at startup."""
+    return any(
+        field in PROMPT_PLACEHOLDERS
+        for argument in template
+        for _, field, _, _ in Formatter().parse(argument)
+    )
+
+
+def render_learner_command(
+    template: Sequence[str],
+    prompt: str,
+    prompt_file: Path,
+) -> tuple[tuple[str, ...], bool]:
+    """Render a verbatim direct command, substituting prompt placeholders when present.
+
+    Returns the command and whether it delivers the prompt itself. Templates without a
+    prompt placeholder stay verbatim, so literal braces keep their previous meaning.
+    """
+    if not _delivers_prompt(template):
+        return tuple(template), False
+    values = {"prompt": prompt, "prompt_file": str(prompt_file)}
+    try:
+        return tuple(argument.format_map(values) for argument in template), True
+    except KeyError as exc:
+        raise ValueError(
+            f"Learner command supports only {{prompt}} and {{prompt_file}}: {exc.args[0]}"
+        ) from exc
+
+
 def _render_command(
     agent: AgentConfig,
     task: Task,
     phase: PromptPhase,
     workdir: Path,
+    prompt: str,
+    prompt_file: Path,
 ) -> tuple[str, ...]:
-    template = agent.commands.plan if phase == PromptPhase.PLAN else agent.commands.execution
     values = {
         "task_number": str(task.task_number),
         "task_title": task.title,
         "task_branch": task.branch_name,
         "phase": phase.value,
         "workdir": str(workdir),
+        "prompt": prompt,
+        "prompt_file": str(prompt_file),
     }
     try:
-        return tuple(argument.format_map(values) for argument in template)
+        return tuple(argument.format_map(values) for argument in _template(agent, phase))
     except KeyError as exc:
         raise ValueError(
             f"Agent {agent.alias!r} command uses unknown placeholder: {exc.args[0]}"
