@@ -23,14 +23,16 @@ local path, default branch, remote, and whether it is selected when a task does 
 
 ### `agents`
 
-Each agent has a `runtime_target` label and direct, plan, and execution command arrays. Supported
-placeholders are `{task_number}`, `{task_title}`, `{task_branch}`, `{phase}`, and `{workdir}`.
+Each agent has a `runtime_target` label and direct, plan, and execution command arrays. Task plan and
+execution commands support `{task_number}`, `{task_title}`, `{task_branch}`, `{phase}`, and
+`{workdir}` placeholders. The learner launches the `direct` array verbatim, so do not put task
+placeholders in it.
 
 Commands must be TOML arrays, not shell strings:
 
 ```toml
 [agents.builder.commands]
-direct = ["agent-cli"]
+direct = ["agent-cli", "--learn"]
 plan = ["agent-cli", "--task", "{task_number}", "--plan"]
 execution = ["agent-cli", "--workdir", "{workdir}"]
 ```

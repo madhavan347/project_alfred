@@ -44,6 +44,20 @@ class PromptBuilder:
             if phase == PromptPhase.PLAN
             else "Implement the approved plan, validate it, and report completion."
         )
+        actor = f"agent:{task.assigned_agent_alias}"
+        lifecycle_commands: tuple[str, ...]
+        if phase == PromptPhase.PLAN:
+            lifecycle_commands = (
+                f"- Plan ready: alfred run event --task {task.task_number} "
+                f"--type plan_completed --note <summary> --actor {actor}",
+            )
+        else:
+            lifecycle_commands = (
+                f"- Progress: alfred task progress --task {task.task_number} "
+                f"--note <message> --actor {actor}",
+                f"- Complete: alfred run complete --task {task.task_number} --result success "
+                f"--note <summary> --actor {actor}",
+            )
         lines = [
             f"# Task {task.task_number}: {task.title}",
             "",
@@ -65,8 +79,7 @@ class PromptBuilder:
             "",
             "## Alfred lifecycle commands",
             "",
-            f"- Progress: alfred task progress --task {task.task_number} --note <message>",
-            f"- Complete: alfred run complete --task {task.task_number} --result success",
+            *lifecycle_commands,
             "",
         ]
         return "\n".join(lines)

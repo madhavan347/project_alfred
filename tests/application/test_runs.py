@@ -47,6 +47,8 @@ class RecordingSessions:
         return self.is_available
 
     def exists(self, name: str) -> bool:
+        if not self.is_available:
+            raise RuntimeError("session backend is unavailable")
         return name in self.names
 
     def create(self, name: str, workdir: Path, command: tuple[str, ...]) -> None:
@@ -178,6 +180,15 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.store.queue(), [7])
         self.assertEqual(self.tasks.require(7).status, TaskStatus.QUEUED)
 
+    def test_queued_run_can_stop_while_session_backend_is_unavailable(self) -> None:
+        self.sessions.is_available = False
+        self.add_task()
+        self.service.trigger((7,))
+        run = self.service.stop(7)
+        self.assertEqual(run.run_status, RunStatus.STOPPED)
+        self.assertEqual(self.store.queue(), [])
+        self.assertEqual(self.tasks.require(7).status, TaskStatus.PENDING)
+
     def test_parallel_limit_is_deterministic(self) -> None:
         self.add_task(number=7)
         self.add_task(number=8)
@@ -223,6 +234,10 @@ class RunServiceTests(unittest.TestCase):
         reopened = self.service.reopen(7)
         self.assertNotEqual(reopened.run_id, first.run_id)
         self.assertEqual(reopened.run_status, RunStatus.RUNNING)
+
+    def test_session_names_are_limited_to_the_configured_prefix(self) -> None:
+        self.sessions.names.update({"alfred-task-7-builder", "unrelated-session"})
+        self.assertEqual(self.service.session_names(), ("alfred-task-7-builder",))
 
 
 if __name__ == "__main__":

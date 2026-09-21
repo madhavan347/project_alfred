@@ -81,6 +81,12 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertIn("# Task 7: Example", prompt)
         self.assertIn("Produce an implementation plan only", prompt)
         self.assertIn(str(self.root), prompt)
+        self.assertIn("--type plan_completed --note <summary> --actor agent:builder", prompt)
+        self.assertNotIn("--result success", prompt)
+
+        execution_prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn("--note <message> --actor agent:builder", execution_prompt)
+        self.assertIn("--note <summary> --actor agent:builder", execution_prompt)
 
     def test_dispatch_starts_session_with_rendered_arguments(self) -> None:
         sessions = RecordingSessions()

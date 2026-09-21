@@ -1,0 +1,42 @@
+version = 1
+
+[alfred]
+timezone = "UTC"
+state_directory = ".alfred/state"
+temp_directory = ".alfred/tmp"
+worktree_directory = ".alfred/worktrees"
+session_prefix = "alfred-e2e"
+tmux_unavailable_policy = "queue"
+
+[workspace]
+root = ".."
+
+[[repositories]]
+name = "app"
+path = "app"
+default_branch = "main"
+remote = "origin"
+selected_by_default = true
+
+[agents.recorder]
+runtime_target = "local-test"
+
+[agents.recorder.commands]
+direct = ["tail", "-f", "/dev/null"]
+plan = ["tail", "-f", "/dev/null"]
+execution = ["tail", "-f", "/dev/null"]
+
+[trackers.markdown]
+enabled = true
+canonical = "tracking/tasks.md"
+agents = "tracking/agents.md"
+daily_notes = "tracking/daily"
+
+[commit.tags]
+patch = "[PATCH]"
+fix = "[FIX]"
+feature = "[FEATURE]"
+
+[knowledge]
+directory = ".alfred/knowledge"
+required_completion_entries = 1

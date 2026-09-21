@@ -108,6 +108,20 @@ planning prompt first, wait for `alfred run continue --task N`, then create work
 same session for implementation. Completion is actor-checked unless an explicit manager override
 is supplied.
 
+The complete operator lifecycle is:
+
+1. Initialize and configure repositories, agents, runtime paths, and optional tracking.
+2. Create and assign a task in direct or plan-execution mode.
+3. Dispatch, observe progress, handle blockers, and inspect worktrees.
+4. Commit and explicitly push changes when ready.
+5. Record knowledge and submit an actor-checked completion report.
+6. Process the report into a human notification with the coordinator.
+7. Review, merge, record deployment, and archive—or stop, recover, and reopen the run.
+
+Every primary, recovery, and supporting flow is documented in
+[User and operator flows](docs/user-flows.md). The executable release walkthrough is in
+[End-to-end release testing](docs/end-to-end-testing.md).
+
 Important command groups:
 
 | Command | Purpose |
@@ -124,6 +138,17 @@ Important command groups:
 | `alfred migrate ...` | Back up and migrate legacy JSON runtime state |
 
 Run `alfred <group> --help` for the complete arguments.
+
+## Documentation
+
+| Guide | Use it for |
+|---|---|
+| [User and operator flows](docs/user-flows.md) | Direct and planned runs, queue recovery, events, completion, review, worktrees, tracking, knowledge, reports, and migration |
+| [End-to-end release testing](docs/end-to-end-testing.md) | Full release-candidate validation with real tmux and disposable Git repositories |
+| [Configuration](docs/configuration.md) | Config discovery, paths, repositories, agents, trackers, commit tags, and knowledge settings |
+| [Architecture](docs/architecture.md) | Package boundaries, persistence, state flow, and safety design |
+| [Release checklist](docs/releasing.md) | Legal, technical, and publication gates |
+| [Contributing](CONTRIBUTING.md) | Development workflow and required checks |
 
 ## State, safety, and migration
 
@@ -156,6 +181,10 @@ fragment for manual review.
 
 The test suite enforces 85% branch-aware coverage. See [Architecture](docs/architecture.md),
 [Configuration](docs/configuration.md), and [Contributing](CONTRIBUTING.md) for more detail.
+
+For a release candidate, the unit and package checks are necessary but not sufficient. Complete the
+isolated [end-to-end release runbook](docs/end-to-end-testing.md), retain the evidence, and resolve
+every failed or skipped check before tagging.
 
 ## License and publication status
 

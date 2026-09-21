@@ -195,7 +195,11 @@ class RunService:
         """Stop a live run and optionally remove its worktrees."""
         task = self.tasks.require(task_number)
         run = self._latest_active(task_number)
-        if run.session_name and self.sessions.exists(run.session_name):
+        if (
+            run.session_name
+            and run.session_status == "active"
+            and self.sessions.exists(run.session_name)
+        ):
             self.sessions.stop(run.session_name)
         if cleanup:
             self.worktrees.cleanup(task_number, force=force)
@@ -270,7 +274,7 @@ class RunService:
 
     def session_names(self) -> tuple[str, ...]:
         """Return sessions owned by this Alfred instance."""
-        return self.sessions.list()
+        return self.sessions.list(self.dispatcher.config.runtime.session_prefix)
 
     def _initial_phase(self, task: Task) -> PromptPhase:
         if not task.assigned_agent_alias:

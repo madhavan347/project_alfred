@@ -14,9 +14,12 @@ claim Semantic Versioning compatibility until its first supported release.
 - Optional transactional Markdown tracker synchronization.
 - Non-destructive legacy JSON migration with backups and idempotent markers.
 - macOS-oriented installable CLI, strict quality checks, and public-project documentation.
+- Complete operator-flow documentation and an isolated end-to-end release test runbook.
 
 ### Security
 
 - Shell-free subprocess argument handling and validated repository/session identifiers.
 - Explicit-only push and forced dirty-worktree cleanup.
+- Generated lifecycle commands identify the assigned agent and include required completion details.
+- Queued runs can be stopped without tmux, and session listings are scoped to Alfred's prefix.
 - Publication remains blocked until ownership and license selection are complete.
