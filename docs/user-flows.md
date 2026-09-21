@@ -80,7 +80,8 @@ Important creation choices:
 | `--dispatch auto` | The task starts as `Pending` and is triggered explicitly by task number. |
 | `--dispatch queued` | The task starts as `Queued` and is eligible for `run trigger --all`. |
 
-Use `task update` to change task details before or during work. Changing the execution mode resets
+`task create` and `task update` reject agent aliases and repository names that are not
+configured. Use `task update` to change task details before or during work. Changing the execution mode resets
 the planning state to the correct initial value. Dependencies are descriptive and appear in
 reports; they do not automatically block dispatch.
 
@@ -150,7 +151,8 @@ For direct execution Alfred:
 2. renders the agent's `commands.execution` argument array;
 3. writes `.alfred/tmp/prompts/task-42-execution.md`;
 4. creates or reuses the task's tmux session;
-5. pastes the prompt into that session;
+5. delivers the prompt — as a command argument when the agent command uses `{prompt}` or
+   `{prompt_file}`, otherwise by bracketed paste (see [Configuration](configuration.md));
 6. persists the run and records `RUN_STARTED`.
 
 `run attach` prints a `tmux attach-session` command; it does not replace the current process with
@@ -182,8 +184,8 @@ After human approval, continue the same run:
 alfred run continue --task 43 --note "Plan approved" --actor manager
 ```
 
-Continuation changes planning state from `started` to `completed`, creates the configured
-worktrees, renders `commands.execution`, and reuses the same session when it still exists. Calling
+Continuation changes planning state from `started` to `completed`, passes the `--note` to the
+agent as the task's latest note, creates the configured worktrees, renders `commands.execution`, and reuses the same session when it still exists. Calling
 `continue` for a direct task, a task without an active plan, or an already-continued plan fails.
 
 `run event --type plan_approved` is an actor-checked alternative that invokes the same continuation
@@ -252,7 +254,9 @@ Completion results map to state as follows:
 
 Completion writes `.alfred/tmp/completions/pending/task-42.json`. The coordinator processes that
 handoff, validates the knowledge-entry count, archives it under `processed/`, and creates a
-persistent human notification.
+persistent human notification. A later completion of the same task is archived alongside the
+earlier one (`task-42-2.json`, and so on) rather than replacing it. `alfred notifications` prints
+each notification's status, agent, repositories, and any validation issues.
 
 Completion marks the persisted session inactive but intentionally does not stop the underlying tmux
 session. That permits a later attempt to reuse it. After the final review/archive, inspect and stop
@@ -287,9 +291,12 @@ alfred run stop --task 42 --reason "Superseded approach" --cleanup no
 ```
 
 Use `--cleanup yes` to remove task worktrees. Dirty worktrees fail closed unless `--force` is also
-provided. In a non-interactive shell, the default `--cleanup ask` behaves as `no`.
+provided; the check runs before the session is stopped, so a refused cleanup leaves the run and its
+agent session untouched. In a non-interactive shell, the default `--cleanup ask` behaves as `no`.
 
-After a stopped, completed, or failed run has no active attempt, create another execution attempt:
+After a stopped, completed, or failed run has no active attempt, create another execution attempt.
+For a plan-execution task this starts the execution phase directly, even after `stop` reset its
+planning state:
 
 ```console
 alfred run reopen --task 42 --actor manager
@@ -403,6 +410,8 @@ alfred learner stop
 ```
 
 Like `run attach`, `learner attach` prints the tmux command rather than attaching automatically.
+The learner is told to add entries only and never to edit, merge, or delete existing ones, because
+knowledge entries are counted per task for completion validation.
 
 ## 14. Reports
 
@@ -416,7 +425,7 @@ alfred report velocity
 ```
 
 - `today` lists non-terminal tasks.
-- `risk` lists blocked, on-hold, P0, and P1 tasks.
+- `risk` lists active (not completed or consolidated) blocked, on-hold, P0, and P1 tasks.
 - `dependency` lists tasks declaring dependencies.
 - `velocity` prints completed-or-consolidated tasks over total tasks.
 
