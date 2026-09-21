@@ -73,6 +73,8 @@ class LearnerService:
                 "",
                 "Review processed completion reports and extract only new, reusable knowledge.",
                 "Avoid duplicates, keep entries concise, and preserve source task references.",
+                "Only add new entries. Never edit, merge, move, or delete existing entries:",
+                "Alfred counts them per task for completion validation.",
                 "",
                 f"Processed completions: {processed}",
                 f"Knowledge directory: {self.config.knowledge.directory}",

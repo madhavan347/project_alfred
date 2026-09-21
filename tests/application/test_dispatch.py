@@ -10,10 +10,11 @@ from alfred.config.models import (
     AgentConfig,
     AlfredConfig,
     CommandConfig,
+    RepositoryConfig,
     RuntimeConfig,
     WorkspaceConfig,
 )
-from alfred.domain.constants import PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase
 from alfred.domain.models import Task
 
 
@@ -87,6 +88,50 @@ class AgentDispatchTests(unittest.TestCase):
         execution_prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
         self.assertIn("--note <message> --actor agent:builder", execution_prompt)
         self.assertIn("--note <summary> --actor agent:builder", execution_prompt)
+
+    def test_direct_prompt_does_not_reference_an_approved_plan(self) -> None:
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn("Implement the task, validate it", prompt)
+        self.assertNotIn("approved plan", prompt)
+        self.task.execution_mode = ExecutionMode.PLAN_EXECUTION
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn("Implement the approved plan", prompt)
+
+    def test_execution_prompt_lists_blocker_and_knowledge_commands(self) -> None:
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn("--type blocked --note <reason> --actor agent:builder", prompt)
+        self.assertIn("alfred knowledge add --task 7", prompt)
+        self.assertIn("--agent builder", prompt)
+
+    def test_plan_prompt_names_selected_repository_sources(self) -> None:
+        config = AlfredConfig(
+            config_path=self.config.config_path,
+            workspace=WorkspaceConfig(
+                root=self.root,
+                repositories=(
+                    RepositoryConfig(name="api", path=self.root / "api"),
+                    RepositoryConfig(name="web", path=self.root / "web", selected_by_default=True),
+                ),
+            ),
+            runtime=self.config.runtime,
+            agents=self.config.agents,
+        )
+        self.task.target_repositories = ["api"]
+        prompt = PromptBuilder(config).build(self.task, PromptPhase.PLAN, {})
+        self.assertIn(f"- api (source, read-only until approval): {self.root / 'api'}", prompt)
+        self.assertNotIn("- web", prompt)
+        self.task.target_repositories = []
+        prompt = PromptBuilder(config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn(f"- web (source): {self.root / 'web'}", prompt)
+
+    def test_latest_task_notes_reach_the_agent(self) -> None:
+        self.assertNotIn(
+            "## Latest notes",
+            PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {}),
+        )
+        self.task.notes = "Reviewer: add arity tests"
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertIn("## Latest notes\n\nReviewer: add arity tests", prompt)
 
     def test_dispatch_starts_session_with_rendered_arguments(self) -> None:
         sessions = RecordingSessions()

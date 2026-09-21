@@ -119,6 +119,7 @@ class RunService:
             raise ValueError(f"Task {task_number} has no plan awaiting approval")
         run = self._latest_active(task_number)
         task.planning_state = PlanningState.APPROVED
+        task.notes = note
         paths = self.worktrees.create(task)
         outcome = self.dispatcher.dispatch(task, PromptPhase.EXECUTION, paths)
         timestamp = self.clock.timestamp()

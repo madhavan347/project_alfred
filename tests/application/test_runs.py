@@ -172,6 +172,14 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(len(self.sessions.names), 1)
         self.assertEqual(self.tasks.require(7).planning_state, PlanningState.COMPLETED)
 
+    def test_continue_note_reaches_execution_prompt(self) -> None:
+        self.add_task(planned=True)
+        self.service.trigger((7,))
+        self.service.continue_execution(7, "Approved; also cover the empty-key case")
+        prompt_file = self.sessions.prompts[-1][1]
+        self.assertIn("Approved; also cover the empty-key case", prompt_file.read_text())
+        self.assertEqual(self.tasks.require(7).notes, "Approved; also cover the empty-key case")
+
     def test_queue_fallback_persists_task_and_run(self) -> None:
         self.sessions.is_available = False
         self.add_task()

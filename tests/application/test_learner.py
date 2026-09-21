@@ -72,7 +72,9 @@ class LearnerServiceTests(unittest.TestCase):
         self.assertTrue(self.service.start("learner"))
         self.assertFalse(self.service.start("learner"))
         self.assertTrue(self.service.status().running)
-        self.assertIn("Knowledge directory", self.sessions.prompt_file.read_text())  # type: ignore[union-attr]
+        prompt = self.sessions.prompt_file.read_text()  # type: ignore[union-attr]
+        self.assertIn("Knowledge directory", prompt)
+        self.assertIn("Never edit, merge, move, or delete existing entries", prompt)
         self.assertTrue(self.service.stop())
         self.assertFalse(self.service.status().running)
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from string import Formatter
 
 from alfred.config.models import AgentConfig, AlfredConfig
-from alfred.domain.constants import PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase
 from alfred.domain.models import Task
 from alfred.ports.session import SessionBackend
 from alfred.utils.files import atomic_write_text
@@ -38,28 +38,43 @@ class PromptBuilder:
         worktree_paths: dict[str, Path],
     ) -> str:
         """Render task, phase, paths, and lifecycle commands."""
-        repository_lines = [
-            f"- {name}: {path}" for name, path in sorted(worktree_paths.items())
-        ] or [f"- workspace: {self.config.workspace.root}"]
-        instruction = (
-            "Produce an implementation plan only and wait for approval."
-            if phase == PromptPhase.PLAN
-            else "Implement the approved plan, validate it, and report completion."
-        )
+        repository_lines = [f"- {name}: {path}" for name, path in sorted(worktree_paths.items())]
+        if not repository_lines:
+            label = "source, read-only until approval" if phase == PromptPhase.PLAN else "source"
+            repository_lines = [f"- workspace: {self.config.workspace.root}"]
+            repository_lines.extend(
+                f"- {repository.name} ({label}): {repository.path}"
+                for repository in self.config.workspace.repositories
+                if repository.name in task.target_repositories
+                or (not task.target_repositories and repository.selected_by_default)
+            )
+        if phase == PromptPhase.PLAN:
+            instruction = "Produce an implementation plan only and wait for approval."
+        elif task.execution_mode == ExecutionMode.PLAN_EXECUTION:
+            instruction = "Implement the approved plan, validate it, and report completion."
+        else:
+            instruction = "Implement the task, validate it, and report completion."
         actor = f"agent:{task.assigned_agent_alias}"
+        number = task.task_number
         lifecycle_commands: tuple[str, ...]
         if phase == PromptPhase.PLAN:
             lifecycle_commands = (
-                f"- Plan ready: alfred run event --task {task.task_number} "
+                f"- Plan ready: alfred run event --task {number} "
                 f"--type plan_completed --note <summary> --actor {actor}",
             )
         else:
             lifecycle_commands = (
-                f"- Progress: alfred task progress --task {task.task_number} "
+                f"- Progress: alfred task progress --task {number} "
                 f"--note <message> --actor {actor}",
-                f"- Complete: alfred run complete --task {task.task_number} --result success "
+                f"- Blocked: alfred run event --task {number} --type blocked "
+                f"--note <reason> --actor {actor}",
+                f"- Knowledge (before completing): alfred knowledge add --task {number} "
+                "--category <patterns|decisions|entities|issues|conventions> "
+                f"--title <title> --content <learning> --agent {task.assigned_agent_alias}",
+                f"- Complete: alfred run complete --task {number} --result success "
                 f"--note <summary> --actor {actor}",
             )
+        notes = ["## Latest notes", "", task.notes, ""] if task.notes.strip() else []
         lines = [
             f"# Task {task.task_number}: {task.title}",
             "",
@@ -71,6 +86,7 @@ class PromptBuilder:
             "",
             task.description or "(no description)",
             "",
+            *notes,
             f"## Phase: {phase.value.upper()}",
             "",
             instruction,
