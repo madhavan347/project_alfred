@@ -3,13 +3,14 @@
 import json
 import shlex
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from alfred.adapters.state import JsonStateStore
+from alfred.domain.models import AgentRun, Task
 from alfred.utils.files import atomic_write_json, atomic_write_text
 
 LEGACY_FILES = ("tasks.json", "runs.json", "queue.json", "agent_map.json")
@@ -53,8 +54,14 @@ def migrate_legacy_runtime(
     if not raw:
         raise MigrationError(f"No legacy state files found in {source}")
 
-    tasks = _records(raw.get("tasks.json", []), "tasks")
-    runs = _records(raw.get("runs.json", []), "runs")
+    tasks = [
+        _normalize(Task.from_dict, record, "task", index)
+        for index, record in enumerate(_records(raw.get("tasks.json", []), "tasks"))
+    ]
+    runs = [
+        _normalize(AgentRun.from_dict, record, "run", index)
+        for index, record in enumerate(_records(raw.get("runs.json", []), "runs"))
+    ]
     queue = _integers(raw.get("queue.json", []), "queued_tasks")
     agent_map = _agent_map(raw.get("agent_map.json", {}))
 
@@ -106,6 +113,19 @@ def _records(value: object, key: str) -> list[dict[str, Any]]:
     if not all(isinstance(item, Mapping) for item in value):
         raise MigrationError(f"Legacy {key} must contain objects")
     return [dict(item) for item in value]
+
+
+def _normalize(
+    loader: Callable[[dict[str, Any]], Task | AgentRun],
+    record: dict[str, Any],
+    label: str,
+    index: int,
+) -> dict[str, Any]:
+    """Load a legacy record through its typed model so migrated state stays readable."""
+    try:
+        return loader(record).to_dict()
+    except (KeyError, TypeError, ValueError) as exc:
+        raise MigrationError(f"Legacy {label} at index {index} cannot be migrated: {exc}") from exc
 
 
 def _integers(value: object, key: str) -> list[int]:

@@ -19,7 +19,16 @@ class MigrationCommandTests(unittest.TestCase):
             legacy = root / "legacy"
             legacy.mkdir()
             (legacy / "tasks.json").write_text(
-                json.dumps([{"task_number": 7}]),
+                json.dumps(
+                    [
+                        {
+                            "task_number": 7,
+                            "title": "Legacy task",
+                            "description": "Imported",
+                            "worktree_mode": "disabled",
+                        }
+                    ]
+                ),
                 encoding="utf-8",
             )
             output = StringIO()
