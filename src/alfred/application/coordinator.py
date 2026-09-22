@@ -95,12 +95,21 @@ class Coordinator:
             for item in self.notifications.pending()
         }
         created = 0
-        for raw in self.store.runs():
+        records = self.store.runs()
+        marked = False
+        for raw in records:
             run = AgentRun.from_dict(raw)
-            if run.run_status != RunStatus.RUNNING or not run.session_name:
+            if (
+                run.run_status != RunStatus.RUNNING
+                or not run.session_name
+                or run.session_status == "dead"
+                or run.session_name in active
+            ):
                 continue
-            key = ("session_died", run.task_number, run.session_name)
-            if run.session_name in active or key in existing:
+            # Record the death on the run so acknowledging the alert does not re-arm it.
+            raw["session_status"] = "dead"
+            marked = True
+            if ("session_died", run.task_number, run.session_name) in existing:
                 continue
             self.notifications.create(
                 "session_died",
@@ -111,4 +120,6 @@ class Coordinator:
                 },
             )
             created += 1
+        if marked:
+            self.store.save_runs(records)
         return created

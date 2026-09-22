@@ -113,6 +113,25 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(second.dead_sessions, 0)
         self.assertEqual(len(self.notifications.pending()), 1)
 
+    def test_dead_session_is_not_reported_again_after_acknowledgement(self) -> None:
+        run = AgentRun(
+            run_id="run-1",
+            task_number=7,
+            agent_alias="builder",
+            runtime_target="local",
+            run_status=RunStatus.RUNNING,
+            session_name="alfred-task-7-builder",
+            session_status="active",
+        )
+        self.store.save_runs([run.to_dict()])
+        self.assertEqual(self.coordinator().process_once().dead_sessions, 1)
+        self.notifications.acknowledge(7)
+        self.notifications.clear_acknowledged()
+        self.assertEqual(self.coordinator().process_once().dead_sessions, 0)
+        self.assertEqual(self.notifications.pending(), ())
+        self.assertEqual(self.store.runs()[0]["session_status"], "dead")
+        self.assertEqual(self.store.runs()[0]["run_status"], "running")
+
     def test_live_session_does_not_notify(self) -> None:
         run = AgentRun(
             run_id="run-1",
