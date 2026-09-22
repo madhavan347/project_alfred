@@ -92,6 +92,14 @@ class RunCommandTests(unittest.TestCase):
         listing = Namespace(action="list", status="running")
         self.assertIn("task=7", self.output(handle_run, listing, services)[1])
 
+    def test_trigger_reports_tasks_left_by_the_parallel_limit(self) -> None:
+        services = SimpleNamespace(runs=FakeRuns())
+        trigger = Namespace(
+            action="trigger", all=False, tasks="7,8,9,8", parallel=1, actor="manager"
+        )
+        output = self.output(handle_run, trigger, services)[1]
+        self.assertIn("Not dispatched (--parallel 1): 8, 9", output)
+
     def test_worktree_status_commit_and_push_render_results(self) -> None:
         services = SimpleNamespace(
             tasks=SimpleNamespace(require=lambda number: Task(number, "Example", "Details")),

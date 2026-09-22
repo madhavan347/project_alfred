@@ -27,6 +27,9 @@ def handle_run(args: argparse.Namespace, services: AlfredServices) -> int:
         )
         for run in runs:
             print(f"Task {run.task_number}: {run.run_status} ({run.run_id})")
+        skipped = list(dict.fromkeys(task_numbers))[args.parallel :]
+        if skipped:
+            print(f"Not dispatched (--parallel {args.parallel}): {', '.join(map(str, skipped))}")
         return 0
 
     if args.action == "list":
