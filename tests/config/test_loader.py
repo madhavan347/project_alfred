@@ -101,6 +101,14 @@ class ConfigLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "requires canonical"):
             load_config(self.config_path)
 
+    def test_invalid_session_prefix_is_rejected_at_load(self) -> None:
+        config = VALID_CONFIG.replace(
+            'session_prefix = "workflow"', 'session_prefix = "bad prefix"'
+        )
+        self.config_path.write_text(textwrap.dedent(config), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Session prefix must start with an alphanumeric"):
+            load_config(self.config_path)
+
     def test_invalid_toml_has_actionable_error(self) -> None:
         self.config_path.write_text("[broken", encoding="utf-8")
         with self.assertRaisesRegex(ConfigError, "Invalid TOML"):

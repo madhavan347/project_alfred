@@ -88,6 +88,14 @@ class RuntimeConfig:
     session_prefix: str = DEFAULT_SESSION_PREFIX
     tmux_unavailable_policy: str = DEFAULT_TMUX_POLICY
 
+    def __post_init__(self) -> None:
+        # Session names are built from this prefix, so reject it before any dispatch side effect.
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", self.session_prefix):
+            raise ValueError(
+                "Session prefix must start with an alphanumeric character and contain only "
+                "letters, numbers, underscores, or hyphens"
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class MarkdownTrackerConfig:
