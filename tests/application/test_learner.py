@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 
@@ -39,7 +40,32 @@ class FakeSessions:
         self.running = False
 
     def list(self, prefix: str = "") -> tuple[str, ...]:
-        return (LearnerService.SESSION_NAME,) if self.running else ()
+        return ("alfred-task-learner",) if self.running else ()
+
+
+class NamedSessions:
+    """One shared tmux server: sessions are tracked by name across workspaces."""
+
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+
+    def available(self) -> bool:
+        return True
+
+    def exists(self, name: str) -> bool:
+        return name in self.names
+
+    def create(self, name: str, workdir: Path, command: tuple[str, ...]) -> None:
+        self.names.add(name)
+
+    def send_prompt(self, name: str, prompt_file: Path) -> None:
+        pass
+
+    def stop(self, name: str) -> None:
+        self.names.discard(name)
+
+    def list(self, prefix: str = "") -> tuple[str, ...]:
+        return tuple(sorted(name for name in self.names if name.startswith(prefix)))
 
 
 class LearnerServiceTests(unittest.TestCase):
@@ -67,6 +93,22 @@ class LearnerServiceTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def test_learner_session_is_scoped_to_the_workspace_prefix(self) -> None:
+        shared = NamedSessions()
+        other_config = replace(
+            self.config,
+            runtime=replace(self.config.runtime, session_prefix="other-ws"),
+        )
+        this = LearnerService(self.config, shared)
+        other = LearnerService(other_config, shared)
+        self.assertTrue(this.start("learner"))
+        self.assertEqual(this.status().session_name, "alfred-task-learner")
+        self.assertFalse(other.status().running)
+        self.assertFalse(other.stop())
+        self.assertTrue(this.status().running)
+        self.assertTrue(other.start("learner"))
+        self.assertEqual(shared.names, {"alfred-task-learner", "other-ws-learner"})
 
     def test_start_status_and_stop(self) -> None:
         self.assertTrue(self.service.start("learner"))

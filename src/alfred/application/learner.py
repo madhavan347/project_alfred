@@ -20,11 +20,11 @@ class LearnerStatus:
 class LearnerService:
     """Start and stop a configured agent that extracts reusable learnings."""
 
-    SESSION_NAME = "alfred-learner"
-
     def __init__(self, config: AlfredConfig, sessions: SessionBackend) -> None:
         self.config = config
         self.sessions = sessions
+        # Scoped by prefix so workspaces sharing one tmux server keep separate learners.
+        self.session_name = f"{config.runtime.session_prefix}-learner"
         self.marker = config.runtime.state_directory / "learner.active"
 
     def start(self, agent_alias: str) -> bool:
@@ -35,7 +35,7 @@ class LearnerService:
             raise ValueError(f"Unknown agent {agent_alias!r}; configured agents: {available}")
         if not self.sessions.available():
             raise RuntimeError("The configured session backend is unavailable")
-        if self.sessions.exists(self.SESSION_NAME):
+        if self.sessions.exists(self.session_name):
             return False
 
         prompt = self._prompt()
@@ -44,26 +44,26 @@ class LearnerService:
             agent.commands.direct, prompt, prompt_file
         )
         atomic_write_text(prompt_file, prompt)
-        self.sessions.create(self.SESSION_NAME, self.config.workspace.root, command)
+        self.sessions.create(self.session_name, self.config.workspace.root, command)
         if not delivers_prompt:
-            self.sessions.send_prompt(self.SESSION_NAME, prompt_file)
+            self.sessions.send_prompt(self.session_name, prompt_file)
         atomic_write_text(self.marker, f"{agent_alias}\n")
         return True
 
     def stop(self) -> bool:
         """Stop the learner if active and remove its marker."""
-        if not self.sessions.available() or not self.sessions.exists(self.SESSION_NAME):
+        if not self.sessions.available() or not self.sessions.exists(self.session_name):
             self.marker.unlink(missing_ok=True)
             return False
-        self.sessions.stop(self.SESSION_NAME)
+        self.sessions.stop(self.session_name)
         self.marker.unlink(missing_ok=True)
         return True
 
     def status(self) -> LearnerStatus:
         """Return backend state and the marker's configured agent alias."""
         alias = self.marker.read_text(encoding="utf-8").strip() if self.marker.is_file() else ""
-        running = self.sessions.available() and self.sessions.exists(self.SESSION_NAME)
-        return LearnerStatus(running, self.SESSION_NAME, alias)
+        running = self.sessions.available() and self.sessions.exists(self.session_name)
+        return LearnerStatus(running, self.session_name, alias)
 
     def _prompt(self) -> str:
         processed = self.config.runtime.temp_directory / "completions" / "processed"
