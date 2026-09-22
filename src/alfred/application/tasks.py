@@ -21,6 +21,10 @@ from alfred.domain.validation import require_valid_task
 from alfred.ports.tracker import Tracker
 from alfred.utils.time import Clock
 
+# Events that record new work or a status change and therefore require a fresh review approval.
+APPROVAL_RESETTING_PREFIXES = ("RUN_", "AGENT_", "STATUS_")
+APPROVAL_RESETTING_EVENTS = frozenset({"PROGRESS", "PLAN_APPROVED", "REVIEW_CHANGES_REQUESTED"})
+
 
 class TaskService:
     """Persist validated task changes with event and tracker rollback."""
@@ -196,10 +200,10 @@ class TaskService:
         """Record the merge of an approved task and move it to testing and deployment."""
         task = self.require(task_number)
         self._require_no_active_run(task_number, "merge")
-        if task.status != TaskStatus.IN_REVIEW:
+        if task.status != TaskStatus.IN_REVIEW or not self._approved_since_last_work(task_number):
             raise TransitionError(
-                f"Task {task_number} must be approved (MR in Review) before merge; "
-                f"status is {task.status}"
+                f"Task {task_number} must be approved with 'task review --decision approved' "
+                f"after its latest work before merge; status is {task.status}"
             )
         require_phase_transition(task.lifecycle_phase, LifecyclePhase.TESTING_DEPLOYMENT)
         self.record(
@@ -264,6 +268,21 @@ class TaskService:
             f"PHASE_{phase.value.upper()}",
             note or f"Lifecycle moved to {phase.value}.",
         )
+
+    def _approved_since_last_work(self, task_number: int) -> bool:
+        """Return whether a human approval follows the task's most recent work or status change.
+
+        An agent's successful completion also sets "MR in Review", so the status alone does not
+        show that a reviewer approved the result.
+        """
+        for event in reversed(self.events(task_number)):
+            if event.event_type == "REVIEW_APPROVED":
+                return True
+            if event.event_type in APPROVAL_RESETTING_EVENTS or event.event_type.startswith(
+                APPROVAL_RESETTING_PREFIXES
+            ):
+                return False
+        return False
 
     def _require_no_active_run(self, task_number: int, action: str) -> None:
         """Keep a live agent run from being orphaned by a delivery or terminal transition."""

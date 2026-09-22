@@ -116,7 +116,7 @@ class TaskServiceTests(unittest.TestCase):
 
     def test_merge_requires_an_approved_review(self) -> None:
         self.service.upsert(self.task())
-        with self.assertRaisesRegex(ValueError, "must be approved .MR in Review. before merge"):
+        with self.assertRaisesRegex(ValueError, "must be approved with .task review"):
             self.service.merge(7, "42")
         task = self.service.require(7)
         self.assertEqual((task.status, task.lifecycle_phase), (TaskStatus.PENDING, "active"))
@@ -126,6 +126,24 @@ class TaskServiceTests(unittest.TestCase):
         self.assertEqual(merged.status, TaskStatus.IN_REVIEW)
         self.assertEqual(merged.lifecycle_phase, LifecyclePhase.TESTING_DEPLOYMENT)
         self.assertIn("MERGED", [event.event_type for event in self.service.events(7)])
+
+    def test_agent_completion_alone_does_not_count_as_approval(self) -> None:
+        self.service.upsert(self.task())
+        self.service.progress(7, "Started")
+        task = self.service.require(7)
+        task.status = TaskStatus.IN_REVIEW
+        self.service.record(task, "RUN_COMPLETED", "Agent finished", actor="agent:builder")
+        with self.assertRaisesRegex(ValueError, "must be approved"):
+            self.service.merge(7)
+        self.service.review(7, "approved", "Looks good")
+        task = self.service.require(7)
+        task.status = TaskStatus.IN_REVIEW
+        self.service.record(task, "RUN_COMPLETED", "Agent reworked it", actor="agent:builder")
+        with self.assertRaisesRegex(ValueError, "must be approved"):
+            self.service.merge(7)
+        self.service.review(7, "approved", "Rework approved")
+        self.service.upsert(self.service.require(7))  # detail edits keep the approval
+        self.assertEqual(self.service.merge(7).lifecycle_phase, LifecyclePhase.TESTING_DEPLOYMENT)
 
     def test_deploy_requires_merge_and_completed_task_cannot_be_merged_again(self) -> None:
         self.service.upsert(self.task())
