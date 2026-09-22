@@ -16,6 +16,15 @@ claim Semantic Versioning compatibility until its first supported release.
 - macOS-oriented installable CLI, strict quality checks, and public-project documentation.
 - Complete operator-flow documentation and an isolated end-to-end release test runbook.
 
+### Fixed
+
+- Triggering a task with an active run no longer creates a second run; a queued run is superseded.
+- Merge requires an approved task, deploy requires a merge, and neither they nor archive or
+  consolidate run while an agent run is still active; stopping a run never reopens a terminal task.
+- An `unblocked` event resumes the blocked run, and dead sessions are reported once.
+- Blocked and failed completions produce `task_blocked` and `task_failed` notifications.
+- Invalid session prefixes are rejected at load, and the learner session is workspace-scoped.
+
 ### Security
 
 - Shell-free subprocess argument handling and validated repository/session identifiers.

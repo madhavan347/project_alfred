@@ -296,7 +296,9 @@ Exercise an active blocker and recovery:
 ```
 
 - [ ] Block/unblock changes task status without losing the active attempt.
-- [ ] Failed completion makes that run terminal and leaves the task `In Progress`.
+- [ ] Recording `unblocked` after a blocked completion returns the same run to `running`.
+- [ ] Failed completion makes that run terminal and leaves the task `In Progress`; its notification
+      is `task_failed` with no knowledge validation issue.
 - [ ] Reopen creates a new run ID in execution phase and reuses valid worktrees.
 
 Stop the reopened attempt and verify safe cleanup behavior:
@@ -338,7 +340,8 @@ PATH=/usr/bin:/bin "$ALFRED_E2E_BIN" run stop \
 
 - [ ] Missing tmux with queue policy persists a queued run and prompt without a session.
 - [ ] Stop succeeds without tmux and removes the task from `queue.json`.
-- [ ] Retrying with tmux creates one current running attempt.
+- [ ] Retrying with tmux creates one current running attempt; re-triggering a queued run without
+      stopping it supersedes it, and re-triggering a running task is rejected.
 
 Kill only task 103's sandbox tmux session, then run the coordinator twice:
 
@@ -351,6 +354,7 @@ tmux kill-session -t alfred-e2e-103-recorder
 
 - [ ] Exactly one `session_died` notification is pending.
 - [ ] Acknowledge and clear affect only the requested task and acknowledged records.
+- [ ] A further `coordinator once` after acknowledgement does not raise the alert again.
 
 ## 7. Tracker, reporting, knowledge, and learner
 
@@ -408,6 +412,10 @@ Verify each failure returns non-zero, prints an actionable error, and leaves pri
 | dependency contains self or duplicates | task rejected |
 | unknown agent, repository, commit type, or command placeholder | rejected before external mutation |
 | wrong completion/event actor | actor requirement shown; no mutation |
+| invalid `session_prefix` | rejected at config load, before any dispatch |
+| trigger a task with a running run | rejected; one active run remains |
+| merge before approval, deploy before merge | rejected; status and phase unchanged |
+| merge, deploy, archive, or consolidate with an active run | rejected until the run finishes |
 | plan continue on direct, pending, or already-continued task | rejected |
 | trigger with `--parallel 0` | rejected |
 | existing worktree branch does not match task branch | rejected |

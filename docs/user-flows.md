@@ -156,8 +156,12 @@ For direct execution Alfred:
 6. persists the run and records `RUN_STARTED`.
 
 `run attach` prints a `tmux attach-session` command; it does not replace the current process with
-tmux. `--parallel N` limits how many supplied tasks are started by that invocation. Duplicate task
-numbers are removed while preserving order.
+tmux. `--parallel N` limits how many supplied tasks are started by that invocation; the tasks it
+leaves undispatched are listed as `Not dispatched (--parallel N): ...`. Duplicate task numbers are
+removed while preserving order.
+
+Triggering a task that already has a running or blocked run is rejected before any worktree or
+session is touched; stop that run first, or use `run reopen` after it has finished.
 
 ## 5. Plan, approve, and execute
 
@@ -198,16 +202,17 @@ With `tmux_unavailable_policy = "queue"`, dispatch still writes the prompt and r
 cannot be found. The run and task become `queued`; no process has started. With policy `error`, the
 dispatch fails instead.
 
-The queue is persistent, not an automatic background scheduler. Cancel the queued attempt—even if
-tmux is still unavailable—then trigger it again after tmux becomes available:
+The queue is persistent, not an automatic background scheduler. After tmux becomes available,
+trigger the task again; the new dispatch supersedes the queued run (recorded as `stopped`) rather
+than adding a second active run. A queued attempt can also be cancelled—even while tmux is still
+unavailable:
 
 ```console
-alfred run stop --task 42 --reason "tmux is available; replacing queued attempt" --cleanup no
 alfred run trigger --tasks 42
+alfred run stop --task 42 --reason "Cancel queued attempt" --cleanup no
 ```
 
-`run trigger --all` selects tasks whose task status is `Queued`. Avoid repeatedly triggering a task
-that already has an active queued or running attempt; each trigger creates a new run record.
+`run trigger --all` selects tasks whose task status is `Queued`.
 
 ## 7. Report progress, blockers, and review readiness
 
@@ -250,11 +255,12 @@ Completion results map to state as follows:
 |---|---|---|---|
 | `success` | `completed` | `MR in Review` | Human review |
 | `failed` | `failed` | `In Progress` | Fix and `run reopen` |
-| `blocked` | `blocked` | `Blocked` | Resolve, record `unblocked`, and continue the same run |
+| `blocked` | `blocked` | `Blocked` | Resolve, record `unblocked` (the run returns to `running`), and continue the same run |
 
 Completion writes `.alfred/tmp/completions/pending/task-42.json`. The coordinator processes that
 handoff, validates the knowledge-entry count, archives it under `processed/`, and creates a
-persistent human notification. A later completion of the same task is archived alongside the
+persistent human notification typed `task_completed`, `task_failed`, or `task_blocked`. The
+knowledge-entry minimum is checked only for successful completions. A later completion of the same task is archived alongside the
 earlier one (`task-42-2.json`, and so on) rather than replacing it. `alfred notifications` prints
 each notification's status, agent, repositories, and any validation issues.
 
@@ -279,12 +285,14 @@ alfred coordinator stop
 ```
 
 It also reports a `session_died` notification when a persisted running run no longer has a live
-tmux session. Repeated polls do not duplicate an unacknowledged alert.
+tmux session, and marks that run's session `dead` so the alert is raised once even after it is
+acknowledged or cleared. The run stays active: stop it, then reopen the task to retry.
 
 ## 9. Stop or reopen a run
 
 Stop closes a live tmux session, marks the run `stopped`, removes the task from the queue, resets the
-task to `Pending`, and resets a plan-execution task to planning state `pending`.
+task to `Pending`, and resets a plan-execution task to planning state `pending`. A task that is
+already `Completed` or `Consolidated` keeps its status; stop then only closes the stale run.
 
 ```console
 alfred run stop --task 42 --reason "Superseded approach" --cleanup no
@@ -338,10 +346,11 @@ alfred task deploy --task 42 --env sandbox --result passed
 alfred task archive --task 42 --note "Sandbox and production checks complete"
 ```
 
-`review --decision changes_requested` returns the task to `In Progress`. `merge` moves lifecycle
-phase to `testing_deployment`. `deploy` marks the task `Completed`; it records the supplied
-environment and result but does not invoke a deployment tool. `archive` is allowed only from
-`testing_deployment`.
+`review --decision changes_requested` returns the task to `In Progress`. `merge` requires an
+approved task (`MR in Review`) and moves lifecycle phase to `testing_deployment`. `deploy` requires
+that phase and marks the task `Completed`; it records the supplied environment and result but does
+not invoke a deployment tool. `archive` is allowed only from `testing_deployment`. Merge, deploy,
+archive, and consolidate are refused while the task still has a queued, running, or blocked run.
 
 Use consolidation instead when a live task is absorbed into another task:
 
@@ -397,10 +406,12 @@ alfred knowledge list --category patterns
 
 The completion report records how many entries match the task. If
 `required_completion_entries` is greater than that count, the coordinator still processes the
-report but adds a validation issue to its notification.
+report but adds a validation issue to its notification. Failed and blocked completions are not
+held to this minimum.
 
-The optional learner is a separate fixed tmux session that receives paths to processed completion
-reports and the knowledge directory:
+The optional learner is a separate tmux session named `<session_prefix>-learner`, so each
+workspace sharing a tmux server has its own. It receives paths to processed completion reports and
+the knowledge directory:
 
 ```console
 alfred learner start --agent builder
