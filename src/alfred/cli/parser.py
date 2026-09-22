@@ -6,6 +6,9 @@ import argparse
 from pathlib import Path
 
 from alfred import __version__
+from alfred.domain.constants import KnowledgeCategory, RunStatus
+
+KNOWLEDGE_CATEGORIES = tuple(category.value for category in KnowledgeCategory)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -130,7 +133,9 @@ def _run_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) 
     trigger.add_argument("--parallel", type=int, default=1)
     trigger.add_argument("--actor", default="manager")
     listing = actions.add_parser("list")
-    listing.add_argument("--status", default="")
+    listing.add_argument(
+        "--status", default="", choices=tuple(status.value for status in RunStatus)
+    )
     stop = actions.add_parser("stop")
     stop.add_argument("--task", type=int, required=True)
     stop.add_argument("--reason", default="manual stop")
@@ -212,14 +217,14 @@ def _knowledge_parser(resources: argparse._SubParsersAction[argparse.ArgumentPar
     actions = knowledge.add_subparsers(dest="action", required=True)
     add = actions.add_parser("add")
     add.add_argument("--task", type=int, required=True)
-    add.add_argument("--category", required=True)
+    add.add_argument("--category", required=True, choices=KNOWLEDGE_CATEGORIES)
     add.add_argument("--title", required=True)
     add.add_argument("--content", required=True)
     add.add_argument("--agent", default="")
     add.add_argument("--files", default="")
     add.add_argument("--modules", default="", help="related repository names")
     listing = actions.add_parser("list")
-    listing.add_argument("--category")
+    listing.add_argument("--category", choices=KNOWLEDGE_CATEGORIES)
 
 
 def _report_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

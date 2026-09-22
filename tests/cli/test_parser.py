@@ -1,6 +1,8 @@
 """Stable CLI parser tests."""
 
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 
 from alfred.cli.parser import build_parser
 
@@ -31,6 +33,30 @@ class ParserTests(unittest.TestCase):
         )
         self.assertEqual(args.status_alias, "success")
         self.assertEqual(args.summary_alias, "Done")
+
+    def test_enumerated_options_list_their_valid_values(self) -> None:
+        cases = {
+            ("run", "list", "--status", "bogus"): r"choose from '?queued'?, '?running",
+            ("knowledge", "list", "--category", "bogus"): r"choose from '?patterns'?, '?decisions",
+            (
+                "knowledge",
+                "add",
+                "--task",
+                "1",
+                "--category",
+                "bogus",
+                "--title",
+                "t",
+                "--content",
+                "c",
+            ): r"choose from '?patterns'?, '?decisions",
+        }
+        for arguments, expected in cases.items():
+            with self.subTest(arguments=arguments):
+                errors = StringIO()
+                with redirect_stderr(errors), self.assertRaises(SystemExit):
+                    build_parser().parse_args(arguments)
+                self.assertRegex(errors.getvalue(), expected)
 
 
 if __name__ == "__main__":
