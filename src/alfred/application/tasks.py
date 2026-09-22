@@ -11,7 +11,11 @@ from alfred.domain.constants import (
     TaskStatus,
 )
 from alfred.domain.models import Task, TaskEvent
-from alfred.domain.state_machine import require_phase_transition, require_transition
+from alfred.domain.state_machine import (
+    TransitionError,
+    require_phase_transition,
+    require_transition,
+)
 from alfred.domain.validation import require_valid_task
 from alfred.ports.tracker import Tracker
 from alfred.utils.time import Clock
@@ -186,6 +190,50 @@ class TaskService:
         task.notes = note
         task.updated_at = self.clock.timestamp()
         return self._commit(task, actor, f"REVIEW_{decision.upper()}", note)
+
+    def merge(self, task_number: int, merge_request: str = "", *, actor: str = "manager") -> Task:
+        """Record the merge of an approved task and move it to testing and deployment."""
+        task = self.require(task_number)
+        if task.status != TaskStatus.IN_REVIEW:
+            raise TransitionError(
+                f"Task {task_number} must be approved (MR in Review) before merge; "
+                f"status is {task.status}"
+            )
+        require_phase_transition(task.lifecycle_phase, LifecyclePhase.TESTING_DEPLOYMENT)
+        self.record(
+            task,
+            "MERGED",
+            f"Merge request: {merge_request}" if merge_request else "Changes merged.",
+            actor=actor,
+        )
+        return self.update_phase(
+            task_number,
+            LifecyclePhase.TESTING_DEPLOYMENT,
+            "Moved to testing and deployment.",
+            actor=actor,
+        )
+
+    def deploy(
+        self,
+        task_number: int,
+        environment: str,
+        result: str,
+        *,
+        actor: str = "manager",
+    ) -> Task:
+        """Record a deployment of a merged task and mark it completed."""
+        task = self.require(task_number)
+        if task.lifecycle_phase != LifecyclePhase.TESTING_DEPLOYMENT:
+            raise TransitionError(
+                f"Task {task_number} must be merged (testing_deployment) before deploy; "
+                f"phase is {task.lifecycle_phase}"
+            )
+        return self.update_status(
+            task_number,
+            TaskStatus.COMPLETED,
+            f"Deploy {environment}: {result}",
+            actor=actor,
+        )
 
     def update_phase(
         self,

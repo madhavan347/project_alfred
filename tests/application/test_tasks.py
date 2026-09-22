@@ -114,6 +114,33 @@ class TaskServiceTests(unittest.TestCase):
         archived = self.service.update_phase(7, LifecyclePhase.ARCHIVED)
         self.assertEqual(archived.status, TaskStatus.COMPLETED)
 
+    def test_merge_requires_an_approved_review(self) -> None:
+        self.service.upsert(self.task())
+        with self.assertRaisesRegex(ValueError, "must be approved .MR in Review. before merge"):
+            self.service.merge(7, "42")
+        task = self.service.require(7)
+        self.assertEqual((task.status, task.lifecycle_phase), (TaskStatus.PENDING, "active"))
+        self.service.progress(7, "Started")
+        self.service.review(7, "approved", "Looks good")
+        merged = self.service.merge(7, "42")
+        self.assertEqual(merged.status, TaskStatus.IN_REVIEW)
+        self.assertEqual(merged.lifecycle_phase, LifecyclePhase.TESTING_DEPLOYMENT)
+        self.assertIn("MERGED", [event.event_type for event in self.service.events(7)])
+
+    def test_deploy_requires_merge_and_completed_task_cannot_be_merged_again(self) -> None:
+        self.service.upsert(self.task())
+        self.service.progress(7, "Started")
+        self.service.review(7, "approved", "Looks good")
+        with self.assertRaisesRegex(ValueError, "must be merged .* before deploy"):
+            self.service.deploy(7, "sandbox", "passed")
+        self.assertEqual(self.service.require(7).status, TaskStatus.IN_REVIEW)
+        self.service.merge(7)
+        deployed = self.service.deploy(7, "sandbox", "passed")
+        self.assertEqual(deployed.status, TaskStatus.COMPLETED)
+        with self.assertRaisesRegex(ValueError, "before merge"):
+            self.service.merge(7)
+        self.assertEqual(self.service.require(7).status, TaskStatus.COMPLETED)
+
     def test_tracker_failure_rolls_back_task_and_event(self) -> None:
         failing = TaskService(
             self.store,

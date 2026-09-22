@@ -8,7 +8,6 @@ from alfred.domain.constants import (
     ExecutionMode,
     LifecyclePhase,
     PlanningState,
-    TaskStatus,
     WorktreeMode,
 )
 from alfred.domain.models import Task
@@ -83,27 +82,9 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             actor=args.actor,
         )
     elif args.action == "merge":
-        task = services.tasks.require(args.task)
-        task.status = TaskStatus.IN_REVIEW
-        services.tasks.record(
-            task,
-            "MERGED",
-            f"Merge request: {args.mr}" if args.mr else "Changes merged.",
-            actor=args.actor,
-        )
-        task = services.tasks.update_phase(
-            args.task,
-            LifecyclePhase.TESTING_DEPLOYMENT,
-            "Moved to testing and deployment.",
-            actor=args.actor,
-        )
+        task = services.tasks.merge(args.task, args.mr, actor=args.actor)
     elif args.action == "deploy":
-        task = services.tasks.update_status(
-            args.task,
-            TaskStatus.COMPLETED,
-            f"Deploy {args.env}: {args.result}",
-            actor=args.actor,
-        )
+        task = services.tasks.deploy(args.task, args.env, args.result, actor=args.actor)
     elif args.action == "archive":
         task = services.tasks.update_phase(
             args.task,
