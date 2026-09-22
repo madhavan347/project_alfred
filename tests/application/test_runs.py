@@ -292,6 +292,18 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual((task.status, task.lifecycle_phase), (TaskStatus.COMPLETED, "archived"))
         self.assertEqual(self.tasks.events(7)[-1].event_type, "RUN_STOPPED")
 
+    def test_unblocked_event_resumes_the_blocked_run(self) -> None:
+        self.add_task()
+        run = self.service.trigger((7,))[0]
+        self.service.complete(7, "blocked", "Need a decision", actor="agent:builder")
+        self.assertEqual(self.service.active(7).run_status, RunStatus.BLOCKED)
+        task = self.service.record_event(7, "unblocked", "Decided", actor="agent:builder")
+        self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
+        resumed = self.service.active(7)
+        self.assertEqual(resumed.run_id, run.run_id)
+        self.assertEqual(resumed.run_status, RunStatus.RUNNING)
+        self.assertEqual(resumed.session_status, "active")
+
     def test_agent_events_are_actor_checked(self) -> None:
         self.add_task()
         self.service.trigger((7,))

@@ -237,7 +237,9 @@ class RunService:
         if normalized == "blocked":
             return self.tasks.block(task_number, note or "Agent reported a blocker.", actor=actor)
         if normalized == "unblocked":
-            return self.tasks.progress(task_number, note or "Agent resumed execution.", actor=actor)
+            task = self.tasks.progress(task_number, note or "Agent resumed execution.", actor=actor)
+            self._resume_blocked_run(task_number)
+            return task
         if normalized == "review_requested":
             task.status = TaskStatus.IN_REVIEW
         elif normalized in {"progress", "coding", "execution_started", "fixing"}:
@@ -253,6 +255,21 @@ class RunService:
             note or normalized.replace("_", " ").title(),
             actor=actor,
         )
+
+    def _resume_blocked_run(self, task_number: int) -> None:
+        """Return a run blocked at completion to running so it is monitored again."""
+        run = self.active(task_number)
+        if run is None or run.run_status != RunStatus.BLOCKED:
+            return
+        run.run_status = RunStatus.RUNNING
+        run.last_event_at = self.clock.timestamp()
+        if (
+            run.session_name
+            and self.sessions.available()
+            and self.sessions.exists(run.session_name)
+        ):
+            run.session_status = "active"
+        self._save_run(run)
 
     def reopen(self, task_number: int, *, actor: str = "manager") -> AgentRun:
         """Start a new execution attempt after a previous run reached a terminal state."""
