@@ -89,6 +89,24 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(len(self.completions.pending()), 0)
         self.assertIn("knowledge_entries", pending[0].details["validation_issues"][0])
 
+    def test_blocked_and_failed_completions_are_typed_and_skip_the_knowledge_gate(self) -> None:
+        for number, status in ((8, CompletionStatus.BLOCKED), (9, CompletionStatus.FAILED)):
+            self.completions.write(
+                CompletionReport(
+                    task_number=number,
+                    agent="builder",
+                    status=status,
+                    summary="Could not finish",
+                    knowledge_entries=0,
+                )
+            )
+        self.coordinator().process_once()
+        pending = {item.task_number: item for item in self.notifications.pending()}
+        self.assertEqual(pending[8].notification_type, "task_blocked")
+        self.assertEqual(pending[9].notification_type, "task_failed")
+        self.assertEqual(pending[8].details["validation_issues"], [])
+        self.assertEqual(pending[9].details["validation_issues"], [])
+
     def test_quarantines_malformed_completion(self) -> None:
         self.completions.pending_directory.mkdir(parents=True)
         path = self.completions.pending_directory / "task-7.json"

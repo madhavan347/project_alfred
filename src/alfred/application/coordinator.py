@@ -7,9 +7,15 @@ from alfred.adapters.completion import CompletionFileStore
 from alfred.adapters.state import JsonStateStore
 from alfred.application.notifications import NotificationService
 from alfred.config.models import AlfredConfig
-from alfred.domain.constants import RunStatus
+from alfred.domain.constants import CompletionStatus, RunStatus
 from alfred.domain.models import AgentRun, CompletionReport
 from alfred.ports.session import SessionBackend
+
+COMPLETION_NOTIFICATION_TYPES = {
+    CompletionStatus.SUCCESS: "task_completed",
+    CompletionStatus.FAILED: "task_failed",
+    CompletionStatus.BLOCKED: "task_blocked",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +57,7 @@ class Coordinator:
                 continue
             issues = self._completion_issues(report)
             self.notifications.create(
-                "task_completed",
+                COMPLETION_NOTIFICATION_TYPES[report.status],
                 report.task_number,
                 {
                     "status": report.status.value,
@@ -80,7 +86,8 @@ class Coordinator:
         if not report.summary.strip():
             issues.append("summary is required")
         required = self.config.knowledge.required_completion_entries
-        if report.knowledge_entries < required:
+        # Blocked and failed reports record why work stopped; only delivered work needs knowledge.
+        if report.status == CompletionStatus.SUCCESS and report.knowledge_entries < required:
             issues.append(
                 f"knowledge_entries must be at least {required}; got {report.knowledge_entries}"
             )
