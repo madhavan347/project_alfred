@@ -245,6 +245,19 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.service.active(7), running)
         self.assertEqual(self.store.queue(), [])
 
+    def test_retrigger_supersedes_a_queued_plan_run_in_the_plan_phase(self) -> None:
+        self.sessions.is_available = False
+        self.add_task(planned=True)
+        queued = self.service.trigger((7,))[0]
+        self.sessions.is_available = True
+        running = self.service.trigger((7,))[0]
+        self.assertEqual(running.phase, "plan")
+        self.assertEqual(running.run_status, RunStatus.RUNNING)
+        self.assertEqual(self.worktrees.created, 0)
+        runs = {run.run_id: run for run in self.service.list(7)}
+        self.assertEqual(runs[queued.run_id].run_status, RunStatus.STOPPED)
+        self.assertEqual(self.tasks.require(7).planning_state, PlanningState.STARTED)
+
     def test_corrupt_run_state_is_rejected_before_dispatch_side_effects(self) -> None:
         self.add_task()
         self.store.path("runs").write_text('{"schema_version": 1, "runs": [', encoding="utf-8")

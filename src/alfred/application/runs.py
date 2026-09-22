@@ -298,7 +298,8 @@ class RunService:
                 f"Task {task.task_number} already has an active run; "
                 "stop it before triggering again"
             )
-        phase = self._initial_phase(task)
+        # A queued run never reached its agent, so redispatch the phase it was queued for.
+        phase = PromptPhase(existing.phase) if existing is not None else self._initial_phase(task)
         self.dispatcher.preflight(task, phase)
         paths = self.worktrees.create(task) if phase == PromptPhase.EXECUTION else {}
         outcome = self.dispatcher.dispatch(task, phase, paths)
