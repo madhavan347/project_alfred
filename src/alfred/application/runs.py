@@ -29,6 +29,8 @@ from alfred.domain.state_machine import (
 from alfred.ports.session import SessionBackend
 from alfred.utils.time import Clock
 
+ACTIVE_RUN_STATUSES = frozenset({RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.BLOCKED})
+
 
 class WorktreeOperations(Protocol):
     """Worktree behavior required by run orchestration."""
@@ -253,10 +255,7 @@ class RunService:
     def reopen(self, task_number: int, *, actor: str = "manager") -> AgentRun:
         """Start a new execution attempt after a previous run reached a terminal state."""
         task = self.tasks.require(task_number)
-        if any(
-            run.run_status in {RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.BLOCKED}
-            for run in self.list(task_number)
-        ):
+        if self.active(task_number) is not None:
             raise ValueError(f"Task {task_number} already has an active run")
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             task.planning_state = PlanningState.COMPLETED
@@ -264,10 +263,8 @@ class RunService:
 
     def active(self, task_number: int) -> AgentRun | None:
         """Return the latest active run for a task when one exists."""
-        try:
-            return self._latest_active(task_number)
-        except ValueError:
-            return None
+        runs = [run for run in self.list(task_number) if run.run_status in ACTIVE_RUN_STATUSES]
+        return runs[-1] if runs else None
 
     def session_names(self) -> tuple[str, ...]:
         """Return sessions owned by this Alfred instance."""
@@ -275,10 +272,25 @@ class RunService:
 
     def _start(self, task: Task, actor: str) -> AgentRun:
         """Dispatch one task's initial phase and persist the new run."""
+        # Reading runs first also rejects corrupt run state before any worktree or session exists.
+        existing = self.active(task.task_number)
+        if existing is not None and existing.run_status != RunStatus.QUEUED:
+            raise ValueError(
+                f"Task {task.task_number} already has an active run; "
+                "stop it before triggering again"
+            )
         phase = self._initial_phase(task)
         self.dispatcher.preflight(task, phase)
         paths = self.worktrees.create(task) if phase == PromptPhase.EXECUTION else {}
         outcome = self.dispatcher.dispatch(task, phase, paths)
+        if existing is not None:
+            timestamp = self.clock.timestamp()
+            existing.run_status = RunStatus.STOPPED
+            existing.ended_at = timestamp
+            existing.last_event_at = timestamp
+            existing.summary = "Superseded by a new dispatch."
+            existing.session_status = "inactive"
+            self._save_run(existing)
         run = self._new_run(task, phase, paths, outcome)
         self._save_run(run)
         self._update_queue(task.task_number, add=outcome.queued)
@@ -331,15 +343,10 @@ class RunService:
         )
 
     def _latest_active(self, task_number: int) -> AgentRun:
-        active = {
-            RunStatus.QUEUED,
-            RunStatus.RUNNING,
-            RunStatus.BLOCKED,
-        }
-        runs = [run for run in self.list(task_number) if run.run_status in active]
-        if not runs:
+        run = self.active(task_number)
+        if run is None:
             raise ValueError(f"Task {task_number} has no active run")
-        return runs[-1]
+        return run
 
     def _save_run(self, run: AgentRun) -> None:
         records = [item for item in self.store.runs() if item.get("run_id") != run.run_id]

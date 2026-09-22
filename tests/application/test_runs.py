@@ -223,6 +223,38 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.store.queue(), [])
         self.assertEqual(self.tasks.require(7).status, TaskStatus.PENDING)
 
+    def test_trigger_rejects_a_task_that_already_has_a_live_run(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        prompts = len(self.sessions.prompts)
+        with self.assertRaisesRegex(ValueError, "Task 7 already has an active run"):
+            self.service.trigger((7,))
+        self.assertEqual(len(self.service.list(7)), 1)
+        self.assertEqual(self.worktrees.created, 1)
+        self.assertEqual(len(self.sessions.prompts), prompts)
+
+    def test_retrigger_supersedes_a_queued_run(self) -> None:
+        self.sessions.is_available = False
+        self.add_task()
+        queued = self.service.trigger((7,))[0]
+        self.sessions.is_available = True
+        running = self.service.trigger((7,))[0]
+        runs = {run.run_id: run for run in self.service.list(7)}
+        self.assertEqual(runs[queued.run_id].run_status, RunStatus.STOPPED)
+        self.assertEqual(runs[running.run_id].run_status, RunStatus.RUNNING)
+        self.assertEqual(self.service.active(7), running)
+        self.assertEqual(self.store.queue(), [])
+
+    def test_corrupt_run_state_is_rejected_before_dispatch_side_effects(self) -> None:
+        self.add_task()
+        self.store.path("runs").write_text('{"schema_version": 1, "runs": [', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "invalid JSON"):
+            self.service.trigger((7,))
+        with self.assertRaisesRegex(ValueError, "invalid JSON"):
+            self.service.active(7)
+        self.assertEqual(self.worktrees.created, 0)
+        self.assertEqual(self.sessions.names, set())
+
     def test_parallel_limit_is_deterministic(self) -> None:
         self.add_task(number=7)
         self.add_task(number=8)
