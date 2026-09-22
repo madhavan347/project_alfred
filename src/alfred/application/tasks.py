@@ -10,8 +10,9 @@ from alfred.domain.constants import (
     PlanningState,
     TaskStatus,
 )
-from alfred.domain.models import Task, TaskEvent
+from alfred.domain.models import AgentRun, Task, TaskEvent
 from alfred.domain.state_machine import (
+    ACTIVE_RUN_STATUSES,
     TransitionError,
     require_phase_transition,
     require_transition,
@@ -194,6 +195,7 @@ class TaskService:
     def merge(self, task_number: int, merge_request: str = "", *, actor: str = "manager") -> Task:
         """Record the merge of an approved task and move it to testing and deployment."""
         task = self.require(task_number)
+        self._require_no_active_run(task_number, "merge")
         if task.status != TaskStatus.IN_REVIEW:
             raise TransitionError(
                 f"Task {task_number} must be approved (MR in Review) before merge; "
@@ -223,6 +225,7 @@ class TaskService:
     ) -> Task:
         """Record a deployment of a merged task and mark it completed."""
         task = self.require(task_number)
+        self._require_no_active_run(task_number, "deploy")
         if task.lifecycle_phase != LifecyclePhase.TESTING_DEPLOYMENT:
             raise TransitionError(
                 f"Task {task_number} must be merged (testing_deployment) before deploy; "
@@ -245,6 +248,7 @@ class TaskService:
     ) -> Task:
         """Move a task through deployment, archive, or consolidation phases."""
         task = self.require(task_number)
+        self._require_no_active_run(task_number, phase.value)
         require_phase_transition(task.lifecycle_phase, phase)
         task.lifecycle_phase = phase
         if phase == LifecyclePhase.ARCHIVED:
@@ -260,6 +264,19 @@ class TaskService:
             f"PHASE_{phase.value.upper()}",
             note or f"Lifecycle moved to {phase.value}.",
         )
+
+    def _require_no_active_run(self, task_number: int, action: str) -> None:
+        """Keep a live agent run from being orphaned by a delivery or terminal transition."""
+        active = [
+            run
+            for run in (AgentRun.from_dict(item) for item in self.store.runs())
+            if run.task_number == task_number and run.run_status in ACTIVE_RUN_STATUSES
+        ]
+        if active:
+            raise TransitionError(
+                f"Task {task_number} has an active run ({active[-1].run_status}); "
+                f"complete or stop it before {action}"
+            )
 
     def events(self, task_number: int) -> tuple[TaskEvent, ...]:
         """Return persisted events for one task."""

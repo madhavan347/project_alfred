@@ -9,8 +9,8 @@ from zoneinfo import ZoneInfo
 from alfred.adapters.markdown import DisabledTracker
 from alfred.adapters.state import JsonStateStore
 from alfred.application.tasks import TaskService
-from alfred.domain.constants import DispatchMode, LifecyclePhase, TaskStatus
-from alfred.domain.models import Task
+from alfred.domain.constants import DispatchMode, LifecyclePhase, RunStatus, TaskStatus
+from alfred.domain.models import AgentRun, Task
 from alfred.utils.time import Clock
 
 
@@ -140,6 +140,39 @@ class TaskServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "before merge"):
             self.service.merge(7)
         self.assertEqual(self.service.require(7).status, TaskStatus.COMPLETED)
+
+    def test_lifecycle_completion_is_refused_while_a_run_is_active(self) -> None:
+        self.service.upsert(self.task())
+        self.service.progress(7, "Started")
+        self.service.review(7, "approved", "Looks good")
+        run = AgentRun(
+            run_id="r1",
+            task_number=7,
+            agent_alias="builder",
+            runtime_target="local",
+            run_status=RunStatus.RUNNING,
+            started_at="2026-08-16T10:30:00+00:00",
+        )
+        self.store.save_runs([run.to_dict()])
+        actions = {
+            "merge": lambda: self.service.merge(7),
+            "archive": lambda: self.service.update_phase(7, LifecyclePhase.ARCHIVED),
+            "consolidate": lambda: self.service.update_phase(7, LifecyclePhase.CONSOLIDATED),
+        }
+        for name, action in actions.items():
+            with self.subTest(action=name), self.assertRaisesRegex(ValueError, "active run"):
+                action()
+        run.run_status = RunStatus.COMPLETED
+        self.store.save_runs([run.to_dict()])
+        self.service.merge(7)
+        run.run_status = RunStatus.BLOCKED
+        self.store.save_runs([run.to_dict()])
+        with self.assertRaisesRegex(ValueError, "active run"):
+            self.service.deploy(7, "sandbox", "passed")
+        task = self.service.require(7)
+        self.assertEqual(
+            (task.status, task.lifecycle_phase), (TaskStatus.IN_REVIEW, "testing_deployment")
+        )
 
     def test_tracker_failure_rolls_back_task_and_event(self) -> None:
         failing = TaskService(

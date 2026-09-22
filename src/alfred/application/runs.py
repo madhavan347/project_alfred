@@ -21,6 +21,7 @@ from alfred.domain.constants import (
 )
 from alfred.domain.models import AgentRun, CompletionReport, Task
 from alfred.domain.state_machine import (
+    ACTIVE_RUN_STATUSES,
     COMPLETION_RUN_STATUS,
     COMPLETION_TASK_STATUS,
     normalize_completion_status,
@@ -28,8 +29,6 @@ from alfred.domain.state_machine import (
 )
 from alfred.ports.session import SessionBackend
 from alfred.utils.time import Clock
-
-ACTIVE_RUN_STATUSES = frozenset({RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.BLOCKED})
 
 
 class WorktreeOperations(Protocol):

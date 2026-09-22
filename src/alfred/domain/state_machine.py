@@ -52,6 +52,8 @@ PHASE_TRANSITIONS: Mapping[LifecyclePhase, frozenset[LifecyclePhase]] = {
     LifecyclePhase.CONSOLIDATED: frozenset(),
 }
 
+ACTIVE_RUN_STATUSES = frozenset({RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.BLOCKED})
+
 COMPLETION_TASK_STATUS: Mapping[CompletionStatus, TaskStatus] = {
     CompletionStatus.SUCCESS: TaskStatus.IN_REVIEW,
     CompletionStatus.FAILED: TaskStatus.IN_PROGRESS,
