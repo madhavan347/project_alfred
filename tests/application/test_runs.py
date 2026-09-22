@@ -280,6 +280,18 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.sessions.names, set())
         self.assertEqual(self.worktrees.cleaned, 1)
 
+    def test_stopping_an_orphaned_run_keeps_a_terminal_task_terminal(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        stored = self.store.tasks()
+        stored[0].update(status="Completed", lifecycle_phase="archived")  # e.g. legacy state
+        self.store.save_tasks(stored)
+        run = self.service.stop(7, "Close orphaned run")
+        self.assertEqual(run.run_status, RunStatus.STOPPED)
+        task = self.tasks.require(7)
+        self.assertEqual((task.status, task.lifecycle_phase), (TaskStatus.COMPLETED, "archived"))
+        self.assertEqual(self.tasks.events(7)[-1].event_type, "RUN_STOPPED")
+
     def test_agent_events_are_actor_checked(self) -> None:
         self.add_task()
         self.service.trigger((7,))

@@ -20,10 +20,22 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
         }
     ),
     TaskStatus.QUEUED: frozenset(
-        {TaskStatus.RUNNING, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.ON_HOLD}
+        {
+            TaskStatus.PENDING,
+            TaskStatus.RUNNING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.BLOCKED,
+            TaskStatus.ON_HOLD,
+        }
     ),
     TaskStatus.RUNNING: frozenset(
-        {TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.ON_HOLD, TaskStatus.IN_REVIEW}
+        {
+            TaskStatus.PENDING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.BLOCKED,
+            TaskStatus.ON_HOLD,
+            TaskStatus.IN_REVIEW,
+        }
     ),
     TaskStatus.IN_PROGRESS: frozenset(
         {
@@ -35,7 +47,7 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
         }
     ),
     TaskStatus.IN_REVIEW: frozenset(
-        {TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED}
+        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED}
     ),
     TaskStatus.BLOCKED: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),
     TaskStatus.ON_HOLD: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),

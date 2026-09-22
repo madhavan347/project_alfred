@@ -26,6 +26,12 @@ class StateMachineTests(unittest.TestCase):
         with self.assertRaisesRegex(TransitionError, "cannot transition"):
             require_transition(TaskStatus.COMPLETED, TaskStatus.IN_PROGRESS)
 
+    def test_every_active_status_can_return_to_pending_but_terminal_ones_cannot(self) -> None:
+        for status in TaskStatus:
+            with self.subTest(status=status):
+                terminal = status in {TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED}
+                self.assertEqual(can_transition(status, TaskStatus.PENDING), not terminal)
+
     def test_phase_flow_is_explicit(self) -> None:
         self.assertTrue(
             can_transition_phase(LifecyclePhase.ACTIVE, LifecyclePhase.TESTING_DEPLOYMENT)

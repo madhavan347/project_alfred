@@ -24,6 +24,7 @@ from alfred.domain.state_machine import (
     ACTIVE_RUN_STATUSES,
     COMPLETION_RUN_STATUS,
     COMPLETION_TASK_STATUS,
+    can_transition,
     normalize_completion_status,
     require_transition,
 )
@@ -209,9 +210,11 @@ class RunService:
         run.session_status = "inactive"
         self._save_run(run)
         self._update_queue(task_number, add=False)
-        task.status = TaskStatus.PENDING
-        if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
-            task.planning_state = PlanningState.PENDING
+        # A terminal task keeps its status; stopping then only closes an orphaned run.
+        if can_transition(task.status, TaskStatus.PENDING):
+            task.status = TaskStatus.PENDING
+            if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
+                task.planning_state = PlanningState.PENDING
         self.tasks.record(task, "RUN_STOPPED", note, actor=actor)
         return run
 
