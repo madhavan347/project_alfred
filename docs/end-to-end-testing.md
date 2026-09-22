@@ -414,7 +414,7 @@ Verify each failure returns non-zero, prints an actionable error, and leaves pri
 | wrong completion/event actor | actor requirement shown; no mutation |
 | invalid `session_prefix` | rejected at config load, before any dispatch |
 | trigger a task with a running run | rejected; one active run remains |
-| merge before approval, deploy before merge | rejected; status and phase unchanged |
+| merge before a human approval (including right after a successful completion), deploy before merge | rejected; status and phase unchanged |
 | merge, deploy, archive, or consolidate with an active run | rejected until the run finishes |
 | plan continue on direct, pending, or already-continued task | rejected |
 | trigger with `--parallel 0` | rejected |

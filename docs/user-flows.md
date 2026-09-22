@@ -346,8 +346,10 @@ alfred task deploy --task 42 --env sandbox --result passed
 alfred task archive --task 42 --note "Sandbox and production checks complete"
 ```
 
-`review --decision changes_requested` returns the task to `In Progress`. `merge` requires an
-approved task (`MR in Review`) and moves lifecycle phase to `testing_deployment`. `deploy` requires
+`review --decision changes_requested` returns the task to `In Progress`. `merge` requires a
+`review --decision approved` recorded after the task's latest run, progress, or status change (an
+agent's successful completion alone is not an approval) and moves lifecycle phase to
+`testing_deployment`. `deploy` requires
 that phase and marks the task `Completed`; it records the supplied environment and result but does
 not invoke a deployment tool. `archive` is allowed only from `testing_deployment`. Merge, deploy,
 archive, and consolidate are refused while the task still has a queued, running, or blocked run.
