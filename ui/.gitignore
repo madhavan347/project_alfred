@@ -1,0 +1,2 @@
+# Built frontend (run `npm run build` in web/ to produce it)
+src/alfred_ui/static/
