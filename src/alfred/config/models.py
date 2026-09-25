@@ -16,6 +16,7 @@ from alfred.config.constants import (
     DEFAULT_TMUX_POLICY,
     DEFAULT_WORKTREE_DIRECTORY,
 )
+from alfred.domain.validation import ref_name_problem
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,10 @@ class RepositoryConfig:
                 "Repository name must start with an alphanumeric character and contain only "
                 "letters, numbers, dots, underscores, or hyphens"
             )
+        # Both values reach Git as arguments, so reject anything Git could read as an option.
+        for key, value in (("default_branch", self.default_branch), ("remote", self.remote)):
+            if problem := ref_name_problem(value):
+                raise ValueError(f"Repository {self.name} {key} {problem}: {value!r}")
 
 
 @dataclass(frozen=True, slots=True)

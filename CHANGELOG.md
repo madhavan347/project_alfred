@@ -31,4 +31,6 @@ claim Semantic Versioning compatibility until its first supported release.
 - Explicit-only push and forced dirty-worktree cleanup.
 - Generated lifecycle commands identify the assigned agent and include required completion details.
 - Queued runs can be stopped without tmux, and session listings are scoped to Alfred's prefix.
+- Repository `default_branch` and `remote` values and new task branch names must be valid Git
+  names that cannot be read as options; worktree creation refuses an unsafe stored branch.
 - Publication remains blocked until ownership and license selection are complete.

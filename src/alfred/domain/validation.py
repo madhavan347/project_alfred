@@ -1,7 +1,40 @@
-"""Pure validation rules for task details."""
+"""Pure validation rules for task details and Git names."""
+
+import re
 
 from alfred.domain.constants import PRIORITIES, ExecutionMode, PlanningState, WorktreeMode
 from alfred.domain.models import Task
+
+_FORBIDDEN_REF_CHARACTERS = re.compile(r"[\x00-\x20\x7f~^:?*\[\\]")
+
+
+def ref_name_problem(value: str) -> str | None:
+    """Return why ``value`` is not a safe Git branch or remote name, or ``None`` if it is.
+
+    The rules follow ``git check-ref-format --branch`` and also reject a leading hyphen, so a
+    configured or user-supplied name can never be read by Git as a command-line option.
+    """
+    if not value:
+        return "must not be empty"
+    if value.startswith("-"):
+        return "must not start with '-'"
+    if value == "@":
+        return "must not be '@'"
+    if _FORBIDDEN_REF_CHARACTERS.search(value):
+        return "must not contain spaces, control characters, or any of ~ ^ : ? * [ \\"
+    for sequence in ("..", "@{", "//"):
+        if sequence in value:
+            return f"must not contain '{sequence}'"
+    if value.startswith("/") or value.endswith("/"):
+        return "must not start or end with '/'"
+    if value.endswith("."):
+        return "must not end with '.'"
+    for component in value.split("/"):
+        if component.startswith("."):
+            return "must not have a path component starting with '.'"
+        if component.endswith(".lock"):
+            return "must not have a path component ending with '.lock'"
+    return None
 
 
 def validate_task(task: Task) -> list[str]:

@@ -99,6 +99,26 @@ class TaskServiceTests(unittest.TestCase):
         task.title = "Renamed"
         self.assertEqual(self.service.upsert(task).title, "Renamed")
 
+    def test_upsert_rejects_unsafe_branch_names(self) -> None:
+        for branch in ("-x", "feature/..", "has space"):
+            task = self.task()
+            task.branch_name = branch
+            with self.subTest(branch=branch), self.assertRaisesRegex(ValueError, "branch_name"):
+                self.service.upsert(task)
+        self.assertIsNone(self.service.get(7))
+
+    def test_stored_unsafe_branch_does_not_block_other_updates(self) -> None:
+        self.service.upsert(self.task())
+        stored = self.store.tasks()
+        stored[0]["branch_name"] = "legacy branch"
+        self.store.save_tasks(stored)
+        task = self.service.require(7)
+        task.title = "Renamed"
+        self.assertEqual(self.service.upsert(task).title, "Renamed")
+        task.branch_name = "still bad"
+        with self.assertRaisesRegex(ValueError, "branch_name must not contain spaces"):
+            self.service.upsert(task)
+
     def test_progress_block_unblock_and_review(self) -> None:
         self.service.upsert(self.task())
         self.service.progress(7, "Started", actor="agent:builder")

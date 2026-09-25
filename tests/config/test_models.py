@@ -29,6 +29,18 @@ class ConfigModelTests(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "configured repositories: api"):
             workspace.repository("missing")
 
+    def test_repository_rejects_unsafe_default_branch_and_remote(self) -> None:
+        for field, value in (("default_branch", "--output=/tmp/x"), ("remote", "-oProxy")):
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(
+                    ValueError, f"Repository api {field} must not start with '-'"
+                ),
+            ):
+                RepositoryConfig(name="api", path=Path("/workspace/api"), **{field: value})
+        with self.assertRaisesRegex(ValueError, "default_branch must not contain '..'"):
+            RepositoryConfig(name="api", path=Path("/workspace/api"), default_branch="a..b")
+
 
 if __name__ == "__main__":
     unittest.main()

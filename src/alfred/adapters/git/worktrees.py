@@ -7,6 +7,7 @@ from pathlib import Path
 from alfred.config.models import WorkspaceConfig
 from alfred.domain.constants import WorktreeMode
 from alfred.domain.models import Task
+from alfred.domain.validation import ref_name_problem
 from alfred.ports.process import ProcessRunner
 
 
@@ -43,6 +44,9 @@ class GitWorktreeManager:
             return {}
         if not task.branch_name.strip():
             raise ValueError("branch_name is required when worktrees are enabled")
+        # Stored tasks may predate branch validation; never hand Git an unsafe name.
+        if problem := ref_name_problem(task.branch_name):
+            raise ValueError(f"branch_name {problem}: {task.branch_name!r}")
         names = self._repository_names(task, repositories)
         created: dict[str, Path] = {}
         for name in names:

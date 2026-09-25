@@ -80,6 +80,12 @@ class GitWorktreeManagerTests(unittest.TestCase):
             self.manager.create(self.task)
         self.assertFalse((self.root / "worktrees" / "task-7").exists())
 
+    def test_unsafe_branch_is_rejected_before_git_runs(self) -> None:
+        self.task.branch_name = "--orphan"
+        with self.assertRaisesRegex(ValueError, "branch_name must not start with '-'"):
+            self.manager.create(self.task)
+        self.assertFalse((self.root / "worktrees").exists())
+
     def test_cleanup_unregisters_clean_worktree(self) -> None:
         path = self.manager.create(self.task)["api"]
         self.assertEqual(self.manager.cleanup(7), (path,))

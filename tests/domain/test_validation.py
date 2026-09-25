@@ -4,7 +4,7 @@ import unittest
 
 from alfred.domain.constants import ExecutionMode, PlanningState, WorktreeMode
 from alfred.domain.models import Task
-from alfred.domain.validation import require_valid_task, validate_task
+from alfred.domain.validation import ref_name_problem, require_valid_task, validate_task
 
 
 def valid_task() -> Task:
@@ -47,6 +47,46 @@ class TaskValidationTests(unittest.TestCase):
         task.dependencies = [7]
         with self.assertRaisesRegex(ValueError, "cannot depend on itself"):
             require_valid_task(task)
+
+
+class RefNameTests(unittest.TestCase):
+    def test_accepts_ordinary_branch_and_remote_names(self) -> None:
+        for name in ("main", "trunk", "origin", "feature/health", "release-1.2", "fix_7", "a/b/c"):
+            with self.subTest(name=name):
+                self.assertIsNone(ref_name_problem(name))
+
+    def test_rejects_each_unsafe_form(self) -> None:
+        cases = {
+            "": "must not be empty",
+            "-x": "must not start with '-'",
+            "--upload-pack=evil": "must not start with '-'",
+            "@": "must not be '@'",
+            "a b": "must not contain spaces",
+            "a\tb": "must not contain spaces",
+            "a\x7fb": "must not contain spaces",
+            "a~1": "must not contain spaces",
+            "a^": "must not contain spaces",
+            "a:b": "must not contain spaces",
+            "a?b": "must not contain spaces",
+            "a*b": "must not contain spaces",
+            "a[b": "must not contain spaces",
+            "a\\b": "must not contain spaces",
+            "a..b": "must not contain '..'",
+            "a@{b": "must not contain '@{'",
+            "a//b": "must not contain '//'",
+            "/a": "must not start or end with '/'",
+            "a/": "must not start or end with '/'",
+            "a.": "must not end with '.'",
+            ".a": "path component starting with '.'",
+            "a/.b": "path component starting with '.'",
+            "a.lock": "path component ending with '.lock'",
+            "a.lock/b": "path component ending with '.lock'",
+        }
+        for name, message in cases.items():
+            with self.subTest(name=name):
+                problem = ref_name_problem(name)
+                self.assertIsNotNone(problem)
+                self.assertIn(message, problem or "")
 
 
 if __name__ == "__main__":

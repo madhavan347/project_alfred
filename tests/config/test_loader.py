@@ -109,6 +109,18 @@ class ConfigLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Session prefix must start with an alphanumeric"):
             load_config(self.config_path)
 
+    def test_unsafe_repository_git_names_are_rejected_at_load(self) -> None:
+        replacements = {
+            'default_branch = "trunk"': 'default_branch = "-trunk"',
+            "selected_by_default = true": 'remote = "bad remote"\nselected_by_default = true',
+        }
+        for old, new in replacements.items():
+            with self.subTest(new=new):
+                config = VALID_CONFIG.replace(old, new, 1)
+                self.config_path.write_text(textwrap.dedent(config), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "Repository api (default_branch|remote)"):
+                    load_config(self.config_path)
+
     def test_invalid_toml_has_actionable_error(self) -> None:
         self.config_path.write_text("[broken", encoding="utf-8")
         with self.assertRaisesRegex(ConfigError, "Invalid TOML"):

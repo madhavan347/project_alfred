@@ -17,7 +17,7 @@ from alfred.domain.state_machine import (
     require_phase_transition,
     require_transition,
 )
-from alfred.domain.validation import require_valid_task
+from alfred.domain.validation import ref_name_problem, require_valid_task
 from alfred.ports.tracker import Tracker
 from alfred.utils.time import Clock
 
@@ -68,6 +68,7 @@ class TaskService:
         """Create or replace complete task details with compatible defaults."""
         existing = self.get(task.task_number)
         self._require_configured(task, existing)
+        self._require_safe_branch(task, existing)
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             if task.planning_state == PlanningState.NOT_REQUIRED:
                 task.planning_state = PlanningState.PENDING
@@ -81,6 +82,15 @@ class TaskService:
         task.updated_at = timestamp
         require_valid_task(task)
         return self._commit(task, actor, "TASK_UPSERTED", "Task details created or updated.")
+
+    @staticmethod
+    def _require_safe_branch(task: Task, existing: Task | None) -> None:
+        """Reject a newly supplied branch name that is not a valid Git branch name."""
+        branch = task.branch_name
+        if not branch or (existing is not None and branch == existing.branch_name):
+            return
+        if problem := ref_name_problem(branch):
+            raise ValueError(f"branch_name {problem}: {branch!r}")
 
     def _require_configured(self, task: Task, existing: Task | None) -> None:
         """Reject newly supplied agent aliases or repositories that are not configured."""
