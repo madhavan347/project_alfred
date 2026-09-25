@@ -119,11 +119,12 @@ notification, and detects dead sessions without duplicating alerts.
 
 - The version lives in three places that must move together: `pyproject.toml`,
   `alfred.__version__`, and the assertions in `tests/test_package.py`.
-- CI (`.github/workflows/ci.yml`) runs on macOS across Python 3.11–3.14 and pushes to `main`; the
-  local default branch is `master`, so pushes there only get CI via pull request.
-- The repository has **no license**. Do not add one, and do not prepare a publication step without
-  owner approval — see `docs/releasing.md`.
-- `.alfred/config.toml`, state, prompts, worktrees, and knowledge are gitignored and can contain
-  sensitive project detail; keep them out of commits.
+- CI (`.github/workflows/ci.yml`) runs on macOS across Python 3.11–3.14 for pushes to `master`
+  and for pull requests. It covers the core package only; UI checks are pending in
+  `ui/CHECKLIST.md`.
+- The project is MIT licensed (`LICENSE`). Do not change the license without owner approval — see
+  `docs/releasing.md`.
+- The whole `.alfred/` directory (configuration, state, prompts, worktrees, knowledge) is
+  gitignored and can contain sensitive project detail; keep it out of commits.
 - Unit tests are necessary but not sufficient for a release candidate — `docs/end-to-end-testing.md`
   is the executable runbook with real tmux and disposable Git repositories.

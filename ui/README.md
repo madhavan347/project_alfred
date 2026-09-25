@@ -8,8 +8,9 @@ The UI runs on your Mac next to the `alfred` CLI and works on the same `.alfred`
 Alfred's own services. You can switch between the CLI and the browser at any time. Changes made
 from a shell or by an agent appear in the browser within a second, without reloading.
 
-> [!IMPORTANT]
-> Like the rest of this repository, the UI has no license yet. Do not publish or redistribute it.
+> [!NOTE]
+> The UI is pre-release and still under review before it is merged; see [CHECKLIST.md](CHECKLIST.md).
+> Like the rest of this repository, it is released under the [MIT License](../LICENSE).
 
 ## What you can do
 
