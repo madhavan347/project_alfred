@@ -143,32 +143,35 @@ class RunService:
         target = COMPLETION_TASK_STATUS[status]
         require_transition(task.status, target)
         timestamp = self.clock.timestamp()
-        run.run_status = COMPLETION_RUN_STATUS[status]
-        run.ended_at = timestamp
-        run.last_event_at = timestamp
-        run.summary = summary.strip()
-        run.session_status = "inactive"
-        self._save_run(run)
-        self._update_queue(task_number, add=False)
-        task.status = target
-        self.tasks.record(
-            task,
-            f"RUN_{run.run_status.value.upper()}",
-            run.summary,
-            actor=actor,
-        )
+        run_status = COMPLETION_RUN_STATUS[status]
         worktrees = self.worktrees.statuses(task_number)
         report = CompletionReport(
             task_number=task_number,
             agent=task.assigned_agent_alias,
             status=status,
-            summary=run.summary,
+            summary=summary.strip(),
             repositories=tuple(item.repository for item in worktrees),
             branches={item.repository: item.branch for item in worktrees},
             knowledge_entries=self.knowledge.count_for_task(task_number),
             completed_at=timestamp,
         )
+        task.status = target
+        self.tasks.record(
+            task,
+            f"RUN_{run_status.value.upper()}",
+            report.summary,
+            actor=actor,
+        )
         self.completions.write(report)
+        # The run is marked finished last, so anyone watching run state never sees a completed run
+        # whose task update or coordinator handoff has not been written yet.
+        run.run_status = run_status
+        run.ended_at = timestamp
+        run.last_event_at = timestamp
+        run.summary = report.summary
+        run.session_status = "inactive"
+        self._save_run(run)
+        self._update_queue(task_number, add=False)
         return report
 
     def stop(

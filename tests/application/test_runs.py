@@ -28,7 +28,7 @@ from alfred.domain.constants import (
     RunStatus,
     TaskStatus,
 )
-from alfred.domain.models import Task
+from alfred.domain.models import CompletionReport, Task
 from alfred.utils.time import Clock
 
 
@@ -88,6 +88,21 @@ class RecordingWorktrees:
     def cleanup(self, task_number: int, *, force: bool = False) -> tuple[Path, ...]:
         self.cleaned += 1
         return (self.root / f"task-{task_number}/app",)
+
+
+class StatusCapturingCompletions(CompletionFileStore):
+    """Record the stored run and task status at the moment a report is written."""
+
+    def __init__(self, directory: Path, store: JsonStateStore) -> None:
+        super().__init__(directory)
+        self.store = store
+        self.seen: list[tuple[str, str]] = []
+
+    def write(self, report: CompletionReport) -> Path:
+        run = self.store.runs()[-1]
+        task = next(t for t in self.store.tasks() if t["task_number"] == report.task_number)
+        self.seen.append((run["run_status"], task["status"]))
+        return super().write(report)
 
 
 class RunServiceTests(unittest.TestCase):
@@ -283,6 +298,15 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(report.status, CompletionStatus.SUCCESS)
         self.assertEqual(self.tasks.require(7).status, TaskStatus.IN_REVIEW)
         self.assertEqual(len(CompletionFileStore(self.root / "temp").pending()), 1)
+
+    def test_run_is_marked_completed_only_after_the_report_is_written(self) -> None:
+        completions = StatusCapturingCompletions(self.root / "temp", self.store)
+        self.service.completions = completions
+        self.add_task()
+        self.service.trigger((7,))
+        self.service.complete(7, "success", "Done", actor="agent:builder")
+        self.assertEqual(completions.seen, [("running", TaskStatus.IN_REVIEW.value)])
+        self.assertEqual(self.store.runs()[-1]["run_status"], RunStatus.COMPLETED.value)
 
     def test_stop_closes_session_and_resets_task(self) -> None:
         self.add_task()

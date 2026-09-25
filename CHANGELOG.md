@@ -24,6 +24,8 @@ claim Semantic Versioning compatibility until its first supported release.
 - An `unblocked` event resumes the blocked run, and dead sessions are reported once.
 - Blocked and failed completions produce `task_blocked` and `task_failed` notifications.
 - Invalid session prefixes are rejected at load, and the learner session is workspace-scoped.
+- A completed run is recorded only after its task update and completion report are written, so
+  a finished run is never visible before its coordinator handoff.
 
 ### Security
 
