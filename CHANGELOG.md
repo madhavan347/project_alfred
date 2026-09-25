@@ -9,6 +9,7 @@ claim Semantic Versioning compatibility until its first supported release.
 
 ### Added
 
+- Released under the MIT License.
 - Typed project-local TOML configuration and versioned atomic JSON state.
 - Task, agent, run, worktree, plan-approval, completion, notification, and knowledge workflows.
 - Optional transactional Markdown tracker synchronization.
@@ -35,4 +36,3 @@ claim Semantic Versioning compatibility until its first supported release.
 - Queued runs can be stopped without tmux, and session listings are scoped to Alfred's prefix.
 - Repository `default_branch` and `remote` values and new task branch names must be valid Git
   names that cannot be read as options; worktree creation refuses an unsafe stored branch.
-- Publication remains blocked until ownership and license selection are complete.

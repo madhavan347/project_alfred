@@ -1,13 +1,12 @@
 # Release checklist
 
-Alfred must not be published while the repository has no license.
+Alfred is released under the MIT License.
 
-## Ownership and legal gate
+## License gate
 
-- Confirm every tracked file is owned by the publisher or covered by a compatible grant.
-- Select a license with informed legal review.
-- Add the exact `LICENSE` text and matching `pyproject.toml` metadata/classifier.
-- Recheck dependency and copied-content license compatibility.
+- Confirm `LICENSE` still contains the MIT text and that `pyproject.toml` declares
+  `license = "MIT"` and `license-files = ["LICENSE"]`.
+- Recheck that dependencies and any copied content are compatible with the MIT License.
 
 ## Technical gate
 

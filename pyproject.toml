@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,9 +7,11 @@ name = "project-alfred-cli"
 version = "0.1.0.dev0"
 description = "A local workflow orchestrator for tasks, agents, and Git worktrees"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [
-  { name = "madhavan347", email = "madhavanshri.ms347@gmail.com" },
+  { name = "Shriram sudharsan", email = "85666604+madhavan347@users.noreply.github.com" },
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",

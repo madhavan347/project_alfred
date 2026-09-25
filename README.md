@@ -6,9 +6,9 @@ command-line agents, Git worktrees, and human review on macOS.
 It keeps project configuration in `.alfred/config.toml`, stores local state as versioned JSON,
 uses argument arrays instead of shell command templates, and performs no implicit Git push.
 
-> [!IMPORTANT]
-> This repository does not grant a license yet. Do not publish, redistribute, or reuse the code
-> until the owner selects and adds a license.
+> [!NOTE]
+> Alfred is pre-release software. Commands, configuration, and state formats may still change
+> before the first supported release.
 
 ## Requirements
 
@@ -186,8 +186,6 @@ For a release candidate, the unit and package checks are necessary but not suffi
 isolated [end-to-end release runbook](docs/end-to-end-testing.md), retain the evidence, and resolve
 every failed or skipped check before tagging.
 
-## License and publication status
+## License
 
-No license has been granted. Before any public release, the owner must confirm ownership, select a
-license, add the corresponding `LICENSE` file and package metadata, and perform the final release
-review. Until then, the repository is source-available for its owner only—not open source.
+Alfred is released under the [MIT License](LICENSE).

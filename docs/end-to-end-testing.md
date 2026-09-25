@@ -26,11 +26,10 @@ Do not mark the candidate ready while any required check is skipped, failing, or
 - [ ] The tracked diff and commit range contain only intended release content.
 - [ ] Python 3.11–3.14, Git, and tmux are available for their respective checks.
 - [ ] No real production repository or remote is used in the sandbox walkthrough.
-- [ ] Ownership of every tracked file is confirmed.
-- [ ] A license has been selected, its exact `LICENSE` file added, and package metadata updated.
+- [ ] `LICENSE` contains the MIT text and package metadata declares `license = "MIT"`.
 - [ ] Security-reporting and release-hosting destinations are configured.
 
-The license items are currently blocking. A green technical test does not authorize publication.
+A green technical test does not by itself authorize a release.
 
 ## 2. Automated quality and package gates
 
@@ -445,7 +444,7 @@ git log --oneline --decorate --max-count=20
       from the release unless explicitly sanitized and intended.
 - [ ] Package metadata has the intended author, description, Python requirement, classifiers,
       license expression/file, version, and README rendering.
-- [ ] Dependency and copied-content licenses are compatible with the selected project license.
+- [ ] Dependency and copied-content licenses are compatible with the MIT License.
 - [ ] The changelog contains a dated release section with no unresolved release-critical items.
 - [ ] Security reporting, contribution policy, code of conduct, and repository links are correct.
 - [ ] The release tag will point to the exact tested commit.
@@ -483,7 +482,7 @@ The candidate is technically ready only when:
 - [ ] the exact built artifacts are retained with hashes and are the artifacts to be published;
 - [ ] a clean-machine install of those artifacts passes version, help, initialization, and direct
       task smoke tests;
-- [ ] ownership and licensing blockers are closed;
+- [ ] the `LICENSE` file and package license metadata still match;
 - [ ] the owner signs off on the evidence and exact release commit.
 
 After publication, install from the public index in a new environment and repeat the entry-point,

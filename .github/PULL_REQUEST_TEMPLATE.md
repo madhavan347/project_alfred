@@ -20,7 +20,3 @@ Describe the user-visible or maintenance outcome.
 - [ ] Migration/backward-compatibility impact is described
 - [ ] Network, push, cleanup, or other external-state changes are explicit
 - [ ] The change is one coherent incremental slice
-
-## Publication gate
-
-- [ ] This change does not imply open-source permission while the repository has no license

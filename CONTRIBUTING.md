@@ -1,8 +1,8 @@
 # Contributing
 
-Alfred is not accepting public contributions until a license is selected and published. This guide
-defines the expected workflow for authorized local collaborators and will apply to public
-contributions after that release gate is cleared.
+Contributions are welcome through pull requests. By contributing, you agree that your
+contribution is licensed under the project's [MIT License](LICENSE). This guide defines the
+expected workflow.
 
 ## Development setup
 
