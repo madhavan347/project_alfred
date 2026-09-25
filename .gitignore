@@ -8,16 +8,22 @@ dist/
 
 # Test and analysis output
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 
-# Local Alfred configuration and state
-.alfred/config.toml
-.alfred/state/
-.alfred/tmp/
+# Local Alfred configuration, state, prompts, worktrees, and knowledge
+.alfred/
 data/runtime/
+
+# Secrets and local environment
+.env
+.env.*
+*.pem
+*.key
 
 # Editors and operating systems
 .DS_Store
