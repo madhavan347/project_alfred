@@ -57,6 +57,7 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     create.add_argument("--description", required=True)
     create.add_argument("--category", default="General")
     create.add_argument("--type", choices=_TASK_TYPES, default="development")
+    create.add_argument("--model", default="", help="model for the {model} command placeholder")
     create.add_argument("--priority", default="P2")
     create.add_argument("--deadline", default="")
     create.add_argument("--notes", default="")
@@ -77,6 +78,7 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     for name in ("title", "description", "category", "priority", "deadline", "notes", "branch"):
         update.add_argument(f"--{name}")
     update.add_argument("--type", choices=_TASK_TYPES)
+    update.add_argument("--model")
     update.add_argument("--mode", choices=("direct", "plan-execution"))
     update.add_argument("--worktree", choices=("enabled", "disabled"))
     update.add_argument("--repos")
@@ -128,6 +130,7 @@ def _agent_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]
         command.add_argument("--task", type=int, required=True)
         command.add_argument("--to", required=True)
         command.add_argument("--actor", default="manager")
+        command.add_argument("--model", help="also set the task's model for the new agent")
         if name == "assign":
             command.add_argument("--dispatch", choices=("auto", "queued"))
         else:

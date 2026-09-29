@@ -63,6 +63,7 @@ def build_services(
         tracker,
         clock,
         agent_aliases=config.agents,
+        agent_models={alias: agent.models for alias, agent in config.agents.items()},
         repository_names=(repository.name for repository in config.workspace.repositories),
     )
     worktrees = GitWorktreeManager(

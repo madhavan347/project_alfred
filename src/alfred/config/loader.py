@@ -185,7 +185,9 @@ def _load_agents(value: Mapping[str, Any]) -> dict[str, AgentConfig]:
     agents: dict[str, AgentConfig] = {}
     for alias, raw in value.items():
         table = _as_table(raw, f"agents.{alias}")
-        _reject_unknown(table, {"runtime_target", "commands"}, f"agents.{alias}")
+        _reject_unknown(
+            table, {"runtime_target", "commands", "models", "default_model"}, f"agents.{alias}"
+        )
         commands = _table(table, "commands")
         _reject_unknown(commands, {"direct", "plan", "execution"}, f"agents.{alias}.commands")
         agents[alias] = AgentConfig(
@@ -196,6 +198,8 @@ def _load_agents(value: Mapping[str, Any]) -> dict[str, AgentConfig]:
                 plan=_string_tuple(commands, "plan"),
                 execution=_string_tuple(commands, "execution"),
             ),
+            models=_optional_string_list(table, "models"),
+            default_model=_optional_string(table, "default_model"),
         )
     return agents
 
@@ -288,6 +292,21 @@ def _string_tuple(table: Mapping[str, Any], key: str) -> tuple[str, ...]:
     if not value or not all(isinstance(item, str) and item for item in value):
         raise ConfigError(f"{key} must contain non-empty string arguments")
     return tuple(value)
+
+
+def _optional_string(table: Mapping[str, Any], key: str) -> str:
+    return _string(table, key) if key in table else ""
+
+
+def _optional_string_list(table: Mapping[str, Any], key: str) -> tuple[str, ...]:
+    if key not in table:
+        return ()
+    value = table[key]
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ConfigError(f"{key} must be an array of model names")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ConfigError(f"{key} must contain non-empty strings")
+    return tuple(item.strip() for item in value)
 
 
 def _boolean(table: Mapping[str, Any], key: str, *, default: bool) -> bool:

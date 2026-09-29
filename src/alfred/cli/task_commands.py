@@ -24,6 +24,7 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             description=args.description,
             category=args.category,
             task_type=TaskType(args.type),
+            model=args.model.strip(),
             priority=args.priority,
             deadline=args.deadline,
             notes=args.notes,
@@ -54,6 +55,8 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             # Renames the Git branch in existing worktrees too, then reloads the stored task.
             services.runs.rename_branch(args.task, args.branch)
             task.branch_name = args.branch.strip()
+        if args.model is not None:
+            task.model = args.model.strip()
         if args.type is not None:
             task.task_type = TaskType(args.type)
         if args.mode is not None:
@@ -138,6 +141,7 @@ def handle_agent(args: argparse.Namespace, services: AlfredServices) -> int:
             actor=args.actor,
             stop_run=args.mode == "stop-and-switch",
             dispatch_mode=dispatch,
+            model=args.model,
         )
     else:
         task = services.tasks.assign(
@@ -145,6 +149,7 @@ def handle_agent(args: argparse.Namespace, services: AlfredServices) -> int:
             args.to,
             actor=args.actor,
             dispatch_mode=dispatch,
+            model=args.model,
         )
     print(f"Task {task.task_number} assigned to {task.assigned_agent_alias}")
     return 0

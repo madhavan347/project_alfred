@@ -25,6 +25,7 @@ class Task:
     description: str
     category: str = "General"
     task_type: TaskType = TaskType.DEVELOPMENT
+    model: str = ""
     priority: str = "P2"
     status: TaskStatus = TaskStatus.PENDING
     deadline: str = ""
