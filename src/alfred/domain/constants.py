@@ -13,6 +13,13 @@ class TaskStatus(StrEnum):
     IN_REVIEW = "MR in Review"
     COMPLETED = "Completed"
     CONSOLIDATED = "Consolidated"
+    CANCELLED = "Cancelled"
+
+
+class TaskType(StrEnum):
+    DEVELOPMENT = "development"
+    RESEARCH = "research"
+    ANALYSIS = "analysis"
 
 
 class DispatchMode(StrEnum):

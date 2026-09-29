@@ -1,6 +1,6 @@
 """Task and agent-assignment application workflows."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 
 from alfred.adapters.state import JsonStateStore
 from alfred.domain.constants import (
@@ -9,6 +9,8 @@ from alfred.domain.constants import (
     LifecyclePhase,
     PlanningState,
     TaskStatus,
+    TaskType,
+    WorktreeMode,
 )
 from alfred.domain.models import AgentRun, Task, TaskEvent
 from alfred.domain.state_machine import (
@@ -37,12 +39,14 @@ class TaskService:
         *,
         agent_aliases: Iterable[str] = (),
         repository_names: Iterable[str] = (),
+        agent_models: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         self.store = store
         self.tracker = tracker
         self.clock = clock
         self.agent_aliases = frozenset(agent_aliases)
         self.repository_names = frozenset(repository_names)
+        self.agent_models = {alias: tuple(models) for alias, models in (agent_models or {}).items()}
 
     def list(self) -> tuple[Task, ...]:
         """Return tasks ordered by task number."""
@@ -69,11 +73,15 @@ class TaskService:
         existing = self.get(task.task_number)
         self._require_configured(task, existing)
         self._require_safe_branch(task, existing)
+        self._require_model_allowed(task)
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             if task.planning_state == PlanningState.NOT_REQUIRED:
                 task.planning_state = PlanningState.PENDING
         else:
             task.planning_state = PlanningState.NOT_REQUIRED
+        if task.task_type != TaskType.DEVELOPMENT:
+            # Research and analysis produce findings, not commits, so they never need a branch.
+            task.worktree_mode = WorktreeMode.DISABLED
         if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:
             # Only work that has not started becomes eligible for `run trigger --all`.
             task.status = TaskStatus.QUEUED
@@ -91,6 +99,15 @@ class TaskService:
             return
         if problem := ref_name_problem(branch):
             raise ValueError(f"branch_name {problem}: {branch!r}")
+
+    def _require_model_allowed(self, task: Task) -> None:
+        """Reject a model outside the assigned agent's configured list, when it has one."""
+        allowed = self.agent_models.get(task.assigned_agent_alias, ())
+        if task.model and allowed and task.model not in allowed:
+            raise ValueError(
+                f"Model {task.model!r} is not available for agent "
+                f"{task.assigned_agent_alias!r}; configured models: {', '.join(allowed)}"
+            )
 
     def _require_configured(self, task: Task, existing: Task | None) -> None:
         """Reject newly supplied agent aliases or repositories that are not configured."""
@@ -123,14 +140,18 @@ class TaskService:
         *,
         actor: str = "manager",
         dispatch_mode: DispatchMode | None = None,
+        model: str | None = None,
     ) -> Task:
-        """Assign a configured agent and optionally change dispatch behavior."""
+        """Assign a configured agent and optionally change dispatch behavior or model."""
         if self.agent_aliases and agent_alias not in self.agent_aliases:
             available = ", ".join(sorted(self.agent_aliases))
             raise ValueError(f"Unknown agent {agent_alias!r}; configured agents: {available}")
         task = self.require(task_number)
         old = task.assigned_agent_alias or "unassigned"
         task.assigned_agent_alias = agent_alias
+        if model is not None:
+            task.model = model.strip()
+        self._require_model_allowed(task)
         if dispatch_mode is not None:
             task.dispatch_mode = dispatch_mode
         if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:
@@ -278,6 +299,24 @@ class TaskService:
             f"PHASE_{phase.value.upper()}",
             note or f"Lifecycle moved to {phase.value}.",
         )
+
+    def cancel(self, task_number: int, reason: str, *, actor: str = "manager") -> Task:
+        """Abandon a task at any non-terminal stage and archive it.
+
+        A live run must be stopped first so its session and worktrees are not orphaned.
+        """
+        if not reason.strip():
+            raise ValueError("Cancel reason is required")
+        task = self.require(task_number)
+        self._require_no_active_run(task_number, "cancel")
+        require_transition(task.status, TaskStatus.CANCELLED)
+        if task.lifecycle_phase in {LifecyclePhase.ARCHIVED, LifecyclePhase.CONSOLIDATED}:
+            raise TransitionError(f"Task {task_number} is already {task.lifecycle_phase}")
+        task.status = TaskStatus.CANCELLED
+        task.lifecycle_phase = LifecyclePhase.ARCHIVED
+        task.notes = reason
+        task.updated_at = self.clock.timestamp()
+        return self._commit(task, actor, "STATUS_CANCELLED", reason)
 
     def _approved_since_last_work(self, task_number: int) -> bool:
         """Return whether a human approval follows the task's most recent work or status change.

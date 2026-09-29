@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from string import Formatter
 
+from alfred.application.handoff import HandoffStore
+from alfred.application.skills import SkillService
 from alfred.config.models import AgentConfig, AlfredConfig
-from alfred.domain.constants import ExecutionMode, PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
 from alfred.ports.session import SessionBackend
 from alfred.utils.files import atomic_write_text
@@ -36,6 +38,8 @@ class PromptBuilder:
         task: Task,
         phase: PromptPhase,
         worktree_paths: dict[str, Path],
+        handoff: str = "",
+        skill: str = "",
     ) -> str:
         """Render task, phase, paths, and lifecycle commands."""
         repository_lines = [f"- {name}: {path}" for name, path in sorted(worktree_paths.items())]
@@ -50,6 +54,11 @@ class PromptBuilder:
             )
         if phase == PromptPhase.PLAN:
             instruction = "Produce an implementation plan only and wait for approval."
+        elif task.task_type != TaskType.DEVELOPMENT:
+            instruction = (
+                f"Perform the {task.task_type!s} task without creating a branch or commits, "
+                "and report the findings in the completion note."
+            )
         elif task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             instruction = "Implement the approved plan, validate it, and report completion."
         else:
@@ -75,11 +84,19 @@ class PromptBuilder:
                 f"--note <summary> --actor {actor}",
             )
         notes = ["## Latest notes", "", task.notes, ""] if task.notes.strip() else []
+        branch_line = (
+            [f"Branch: {task.branch_name or '-'}"] if task.task_type == TaskType.DEVELOPMENT else []
+        )
+        skill_lines = [f"## Skill: {phase.value}", "", skill.strip(), ""] if skill.strip() else []
+        handoff_lines = (
+            ["## Handoff from previous agent", "", handoff.strip(), ""] if handoff else []
+        )
         lines = [
             f"# Task {task.task_number}: {task.title}",
             "",
             f"Agent: {task.assigned_agent_alias or 'unassigned'}",
-            f"Branch: {task.branch_name or '-'}",
+            *branch_line,
+            f"Type: {task.task_type!s}",
             f"Mode: {task.execution_mode!s}",
             "",
             "## Description",
@@ -87,10 +104,12 @@ class PromptBuilder:
             task.description or "(no description)",
             "",
             *notes,
+            *handoff_lines,
             f"## Phase: {phase.value.upper()}",
             "",
             instruction,
             "",
+            *skill_lines,
             "## Working directories",
             "",
             *repository_lines,
@@ -129,6 +148,8 @@ class AgentDispatcher:
         self.sessions = sessions
         self.builder = PromptBuilder(config)
         self.prompts = prompts or PromptStore(config.runtime.temp_directory)
+        self.handoffs = HandoffStore(config.runtime.temp_directory)
+        self.skills = SkillService(config.skills.directory)
 
     def dispatch(
         self,
@@ -139,7 +160,13 @@ class AgentDispatcher:
         """Start or reuse a task session, or queue when configured to do so."""
         agent = self._agent(task.assigned_agent_alias)
         workdir = next(iter(worktree_paths.values()), self.config.workspace.root)
-        prompt = self.builder.build(task, phase, worktree_paths)
+        prompt = self.builder.build(
+            task,
+            phase,
+            worktree_paths,
+            self.handoffs.read(task.task_number),
+            self.skills.get(phase),
+        )
         prompt_file = self.prompts.write(task.task_number, phase, prompt)
         command = _render_command(agent, task, phase, workdir, prompt, prompt_file)
         session_name = f"{self.config.runtime.session_prefix}-{task.task_number}-{agent.alias}"
@@ -154,6 +181,7 @@ class AgentDispatcher:
             self.sessions.create(session_name, workdir, command)
         if reused or not _delivers_prompt(_template(agent, phase)):
             self.sessions.send_prompt(session_name, prompt_file)
+        self.handoffs.clear(task.task_number)
         return DispatchOutcome(session_name, prompt_file, preview, True, reused, False)
 
     def preflight(self, task: Task, phase: PromptPhase) -> None:
@@ -178,6 +206,12 @@ PROMPT_PLACEHOLDERS = frozenset({"prompt", "prompt_file"})
 
 def _template(agent: AgentConfig, phase: PromptPhase) -> tuple[str, ...]:
     return agent.commands.plan if phase == PromptPhase.PLAN else agent.commands.execution
+
+
+def _uses_placeholder(template: Sequence[str], name: str) -> bool:
+    return any(
+        field == name for argument in template for _, field, _, _ in Formatter().parse(argument)
+    )
 
 
 def _delivers_prompt(template: Sequence[str]) -> bool:
@@ -226,9 +260,16 @@ def _render_command(
         "workdir": str(workdir),
         "prompt": prompt,
         "prompt_file": str(prompt_file),
+        "model": task.model or agent.default_model,
     }
+    template = _template(agent, phase)
+    if not values["model"] and _uses_placeholder(template, "model"):
+        raise ValueError(
+            f"Agent {agent.alias!r} command uses {{model}} but task {task.task_number} has no "
+            "model and the agent has no default_model"
+        )
     try:
-        return tuple(argument.format_map(values) for argument in _template(agent, phase))
+        return tuple(argument.format_map(values) for argument in template)
     except KeyError as exc:
         raise ValueError(
             f"Agent {agent.alias!r} command uses unknown placeholder: {exc.args[0]}"

@@ -14,7 +14,7 @@ from alfred.config.models import (
     RuntimeConfig,
     WorkspaceConfig,
 )
-from alfred.domain.constants import ExecutionMode, PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
 
 
@@ -89,6 +89,29 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertIn("--note <message> --actor agent:builder", execution_prompt)
         self.assertIn("--note <summary> --actor agent:builder", execution_prompt)
 
+    def test_research_prompt_omits_the_branch_and_forbids_commits(self) -> None:
+        self.task.task_type = TaskType.RESEARCH
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertNotIn("Branch:", prompt)
+        self.assertIn("Type: research", prompt)
+        self.assertIn("without creating a branch or commits", prompt)
+
+    def test_skill_and_handoff_sections_are_added_only_when_present(self) -> None:
+        builder = PromptBuilder(self.config)
+        plain = builder.build(self.task, PromptPhase.PLAN, {})
+        self.assertNotIn("## Skill", plain)
+        self.assertNotIn("## Handoff", plain)
+        prompt = builder.build(self.task, PromptPhase.PLAN, {}, "Left off at step 2", "List risks.")
+        self.assertIn("## Skill: plan\n\nList risks.", prompt)
+        self.assertIn("## Handoff from previous agent\n\nLeft off at step 2", prompt)
+
+    def test_dispatcher_reads_the_configured_skill_file(self) -> None:
+        AgentDispatcher(self.config, RecordingSessions()).skills.set("execution", "Run the tests.")
+        outcome = AgentDispatcher(self.config, RecordingSessions()).dispatch(
+            self.task, PromptPhase.EXECUTION, {}
+        )
+        self.assertIn("## Skill: execution\n\nRun the tests.", outcome.prompt_file.read_text())
+
     def test_direct_prompt_does_not_reference_an_approved_plan(self) -> None:
         prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
         self.assertIn("Implement the task, validate it", prompt)
@@ -154,11 +177,27 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertEqual(sessions.created, [])
         self.assertEqual(len(sessions.prompts), 1)
 
-    def _with_execution(self, *execution: str) -> AlfredConfig:
+    def test_model_placeholder_prefers_the_task_model_then_the_agent_default(self) -> None:
+        config = self._with_execution("agent-cli", "--model", "{model}", default_model="base")
+        sessions = RecordingSessions()
+        AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-2:], ("--model", "base"))
+        self.task.model = "big"
+        sessions = RecordingSessions()
+        AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-2:], ("--model", "big"))
+
+    def test_model_placeholder_without_any_model_fails_preflight(self) -> None:
+        config = self._with_execution("agent-cli", "--model", "{model}")
+        with self.assertRaisesRegex(ValueError, "no model"):
+            AgentDispatcher(config, RecordingSessions()).preflight(self.task, PromptPhase.EXECUTION)
+
+    def _with_execution(self, *execution: str, default_model: str = "") -> AlfredConfig:
         agent = self.config.agents["builder"]
         replaced = AgentConfig(
             alias=agent.alias,
             runtime_target=agent.runtime_target,
+            default_model=default_model,
             commands=CommandConfig(
                 direct=agent.commands.direct,
                 plan=agent.commands.plan,

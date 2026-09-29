@@ -125,6 +125,47 @@ class GitWorktreeManager:
             task_root.rmdir()
         return tuple(removed)
 
+    def rename_branch(
+        self,
+        task_number: int,
+        old_branch: str,
+        new_branch: str,
+        *,
+        force: bool = False,
+    ) -> tuple[Path, ...]:
+        """Rename a task branch in every existing worktree without touching any remote.
+
+        Every worktree is checked before the first rename, and completed renames are reverted
+        if a later one fails. A branch that already has a remote-tracking ref is only renamed
+        with ``force`` because the remote would keep the old name.
+        """
+        if problem := ref_name_problem(new_branch):
+            raise ValueError(f"branch_name {problem}: {new_branch!r}")
+        statuses = self.statuses(task_number)
+        for status in statuses:
+            repository = self.workspace.repository(status.repository)
+            if status.branch != old_branch:
+                raise ValueError(
+                    f"Worktree {status.path} uses {status.branch!r}, expected {old_branch!r}"
+                )
+            if self._branch_exists(repository.path, new_branch):
+                raise ValueError(f"Branch {new_branch!r} already exists in {status.repository}")
+            if not force and self._is_pushed(repository.path, old_branch):
+                raise ValueError(
+                    f"Branch {old_branch!r} exists on a remote in {status.repository}; "
+                    "pass --force to rename only the local branch"
+                )
+        renamed: list[Path] = []
+        try:
+            for status in statuses:
+                self.runner.run(("git", "branch", "-m", old_branch, new_branch), cwd=status.path)
+                renamed.append(status.path)
+        except Exception:
+            for path in renamed:
+                self.runner.run(("git", "branch", "-m", new_branch, old_branch), cwd=path)
+            raise
+        return tuple(renamed)
+
     def primary_workdir(self, task_number: int) -> Path:
         """Return the first task worktree or the configured workspace root."""
         statuses = self.statuses(task_number)
@@ -154,6 +195,12 @@ class GitWorktreeManager:
             check=False,
         )
         return result.returncode == 0
+
+    def _is_pushed(self, repository: Path, branch: str) -> bool:
+        remotes = self._capture(
+            ("git", "for-each-ref", "--format=%(refname)", "refs/remotes"), repository
+        )
+        return any(ref.endswith(f"/{branch}") for ref in remotes.splitlines())
 
     def _ensure_not_diverged(self, repository: Path, base: str, branch: str) -> None:
         counts = self._capture(

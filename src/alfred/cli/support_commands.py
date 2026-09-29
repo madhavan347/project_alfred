@@ -5,6 +5,7 @@ import argparse
 from alfred.application.reports import dependencies, risks, today, velocity
 from alfred.bootstrap import AlfredServices
 from alfred.config.migration import migrate_legacy_runtime
+from alfred.domain.constants import PromptPhase
 
 
 def handle_sync(args: argparse.Namespace, services: AlfredServices) -> int:
@@ -50,6 +51,26 @@ def handle_knowledge(args: argparse.Namespace, services: AlfredServices) -> int:
         print("No knowledge entries")
     for entry in entries:
         print(entry)
+    return 0
+
+
+def handle_skill(args: argparse.Namespace, services: AlfredServices) -> int:
+    """List, show, replace, or remove the plan and execution skills."""
+    skills = services.skills
+    if args.action == "list":
+        for phase in PromptPhase:
+            path = skills.path(phase)
+            print(f"{phase.value}: {path if path.is_file() else 'built-in instructions only'}")
+    elif args.action == "show":
+        print(skills.get(args.phase) or "No skill defined; built-in instructions apply")
+    elif args.action == "set":
+        content = args.content if args.content is not None else args.file.read_text("utf-8")
+        print(f"Skill saved: {skills.set(args.phase, content)}")
+    elif args.action == "remove":
+        removed = skills.remove(args.phase)
+        print("Skill removed" if removed else "No skill to remove")
+    else:
+        raise ValueError(f"Unsupported skill action: {args.action}")
     return 0
 
 

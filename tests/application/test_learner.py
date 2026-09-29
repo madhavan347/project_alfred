@@ -117,6 +117,7 @@ class LearnerServiceTests(unittest.TestCase):
         prompt = self.sessions.prompt_file.read_text()  # type: ignore[union-attr]
         self.assertIn("Knowledge directory", prompt)
         self.assertIn("Never edit, merge, move, or delete existing entries", prompt)
+        self.assertIn("Session transcripts:", prompt)
         self.assertTrue(self.service.stop())
         self.assertFalse(self.service.status().running)
 

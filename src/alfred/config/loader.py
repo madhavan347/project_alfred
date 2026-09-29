@@ -29,6 +29,7 @@ from alfred.config.models import (
     MarkdownTrackerConfig,
     RepositoryConfig,
     RuntimeConfig,
+    SkillsConfig,
     TrackerConfig,
     WorkspaceConfig,
 )
@@ -82,6 +83,7 @@ def load_config(path: Path) -> AlfredConfig:
             "trackers",
             "commit",
             "knowledge",
+            "skills",
         },
         "configuration",
     )
@@ -140,6 +142,7 @@ def load_config(path: Path) -> AlfredConfig:
     trackers = _load_trackers(_table(payload, "trackers"), workspace_root)
     commits = _load_commits(_table(payload, "commit"))
     knowledge = _load_knowledge(_table(payload, "knowledge"), workspace_root)
+    skills = _load_skills(_table(payload, "skills"), workspace_root)
 
     return AlfredConfig(
         config_path=config_path,
@@ -149,6 +152,7 @@ def load_config(path: Path) -> AlfredConfig:
         trackers=trackers,
         commits=commits,
         knowledge=knowledge,
+        skills=skills,
         version=version,
     )
 
@@ -185,7 +189,9 @@ def _load_agents(value: Mapping[str, Any]) -> dict[str, AgentConfig]:
     agents: dict[str, AgentConfig] = {}
     for alias, raw in value.items():
         table = _as_table(raw, f"agents.{alias}")
-        _reject_unknown(table, {"runtime_target", "commands"}, f"agents.{alias}")
+        _reject_unknown(
+            table, {"runtime_target", "commands", "models", "default_model"}, f"agents.{alias}"
+        )
         commands = _table(table, "commands")
         _reject_unknown(commands, {"direct", "plan", "execution"}, f"agents.{alias}.commands")
         agents[alias] = AgentConfig(
@@ -196,6 +202,8 @@ def _load_agents(value: Mapping[str, Any]) -> dict[str, AgentConfig]:
                 plan=_string_tuple(commands, "plan"),
                 execution=_string_tuple(commands, "execution"),
             ),
+            models=_optional_string_list(table, "models"),
+            default_model=_optional_string(table, "default_model"),
         )
     return agents
 
@@ -240,6 +248,13 @@ def _load_knowledge(value: Mapping[str, Any], root: Path) -> KnowledgeConfig:
     return KnowledgeConfig(
         directory=_resolve_path(_string(value, "directory", default=".alfred/knowledge"), root),
         required_completion_entries=_integer(value, "required_completion_entries", default=0),
+    )
+
+
+def _load_skills(value: Mapping[str, Any], root: Path) -> SkillsConfig:
+    _reject_unknown(value, {"directory"}, "skills")
+    return SkillsConfig(
+        directory=_resolve_path(_string(value, "directory", default=".alfred/skills"), root)
     )
 
 
@@ -288,6 +303,21 @@ def _string_tuple(table: Mapping[str, Any], key: str) -> tuple[str, ...]:
     if not value or not all(isinstance(item, str) and item for item in value):
         raise ConfigError(f"{key} must contain non-empty string arguments")
     return tuple(value)
+
+
+def _optional_string(table: Mapping[str, Any], key: str) -> str:
+    return _string(table, key) if key in table else ""
+
+
+def _optional_string_list(table: Mapping[str, Any], key: str) -> tuple[str, ...]:
+    if key not in table:
+        return ()
+    value = table[key]
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ConfigError(f"{key} must be an array of model names")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ConfigError(f"{key} must contain non-empty strings")
+    return tuple(item.strip() for item in value)
 
 
 def _boolean(table: Mapping[str, Any], key: str, *, default: bool) -> bool:

@@ -14,7 +14,7 @@ class VelocityReport:
     total: int
 
 
-TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED})
+TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED, TaskStatus.CANCELLED})
 
 
 def today(tasks: tuple[Task, ...]) -> tuple[Task, ...]:

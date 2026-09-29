@@ -86,6 +86,34 @@ class GitWorktreeManagerTests(unittest.TestCase):
             self.manager.create(self.task)
         self.assertFalse((self.root / "worktrees").exists())
 
+    def test_rename_branch_renames_the_checked_out_branch(self) -> None:
+        self.manager.create(self.task)
+        renamed = self.manager.rename_branch(7, "feature/task-7", "feature/better-name")
+        self.assertEqual(len(renamed), 1)
+        self.assertEqual(self.manager.statuses(7)[0].branch, "feature/better-name")
+        self.assertFalse(self.manager._branch_exists(self.repository, "feature/task-7"))
+
+    def test_rename_branch_rejects_unsafe_taken_and_pushed_names(self) -> None:
+        self.manager.create(self.task)
+        with self.assertRaisesRegex(ValueError, "branch_name"):
+            self.manager.rename_branch(7, "feature/task-7", "bad name")
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.manager.rename_branch(7, "feature/task-7", "main")
+        self.runner.run(
+            ("git", "update-ref", "refs/remotes/origin/feature/task-7", "main"),
+            cwd=self.repository,
+        )
+        with self.assertRaisesRegex(ValueError, "exists on a remote"):
+            self.manager.rename_branch(7, "feature/task-7", "feature/other")
+        self.assertEqual(self.manager.statuses(7)[0].branch, "feature/task-7")
+        self.manager.rename_branch(7, "feature/task-7", "feature/other", force=True)
+        self.assertEqual(self.manager.statuses(7)[0].branch, "feature/other")
+
+    def test_rename_branch_requires_the_expected_current_branch(self) -> None:
+        self.manager.create(self.task)
+        with self.assertRaisesRegex(ValueError, "expected 'feature/old'"):
+            self.manager.rename_branch(7, "feature/old", "feature/new")
+
     def test_cleanup_unregisters_clean_worktree(self) -> None:
         path = self.manager.create(self.task)["api"]
         self.assertEqual(self.manager.cleanup(7), (path,))

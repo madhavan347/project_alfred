@@ -25,7 +25,7 @@ local path, default branch, remote, and whether it is selected when a task does 
 
 Each agent has a `runtime_target` label and direct, plan, and execution command arrays. Task plan and
 execution commands support `{task_number}`, `{task_title}`, `{task_branch}`, `{phase}`, and
-`{workdir}` placeholders. The learner launches the `direct` array verbatim, so do not put task
+`{workdir}` placeholders, plus `{model}`. The learner launches the `direct` array verbatim, so do not put task
 placeholders in it; it may use only `{prompt}` or `{prompt_file}` (see below).
 
 Commands must be TOML arrays, not shell strings:
@@ -35,6 +35,25 @@ Commands must be TOML arrays, not shell strings:
 direct = ["agent-cli", "--learn"]
 plan = ["agent-cli", "--task", "{task_number}", "--plan"]
 execution = ["agent-cli", "--workdir", "{workdir}"]
+```
+
+#### Model selection
+
+An agent may list the `models` it accepts and a `default_model`. A task chooses one with
+`alfred task create|update --model NAME` (or `agent assign|reassign --model NAME`); it must be in
+the agent's `models` when that list is set. `{model}` in a command renders the task's model, then
+the agent's `default_model`. A command that uses `{model}` with neither set fails before any
+worktree or session is created. The learner's `direct` array does not support `{model}`.
+
+```toml
+[agents.claude]
+models = ["opus", "sonnet"]
+default_model = "sonnet"
+
+[agents.claude.commands]
+direct = ["claude", "{prompt}"]
+plan = ["claude", "--model", "{model}", "{prompt}"]
+execution = ["claude", "--model", "{model}", "{prompt}"]
 ```
 
 #### Prompt delivery
@@ -67,6 +86,14 @@ execution = ["agy", "-i", "{prompt}"]
 Agent CLIs may stop at a folder-trust or permission-mode dialog in a detached session, before they
 read the prompt. Answer each dialog once by attaching with `alfred run attach` (or `learner
 attach`); the prompt passed as an argument is submitted after the dialog closes.
+
+### `skills`
+
+`[skills] directory` (default `.alfred/skills`) holds two optional Markdown files, `plan.md` and
+`execution.md`. When a file exists its text is appended to that phase's prompt under a
+"Skill" heading; without it the built-in instructions apply unchanged. Manage them with
+`alfred skill list`, `show --phase plan`, `set --phase plan --file path` (or `--content TEXT`),
+and `remove --phase plan`. Files are limited to 64 KiB.
 
 ### `trackers.markdown`
 

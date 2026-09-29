@@ -17,6 +17,7 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
             TaskStatus.QUEUED,
             TaskStatus.BLOCKED,
             TaskStatus.ON_HOLD,
+            TaskStatus.CANCELLED,
         }
     ),
     TaskStatus.QUEUED: frozenset(
@@ -26,6 +27,7 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
             TaskStatus.IN_PROGRESS,
             TaskStatus.BLOCKED,
             TaskStatus.ON_HOLD,
+            TaskStatus.CANCELLED,
         }
     ),
     TaskStatus.RUNNING: frozenset(
@@ -35,6 +37,7 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
             TaskStatus.BLOCKED,
             TaskStatus.ON_HOLD,
             TaskStatus.IN_REVIEW,
+            TaskStatus.CANCELLED,
         }
     ),
     TaskStatus.IN_PROGRESS: frozenset(
@@ -44,15 +47,27 @@ STATUS_TRANSITIONS: Mapping[TaskStatus, frozenset[TaskStatus]] = {
             TaskStatus.ON_HOLD,
             TaskStatus.IN_REVIEW,
             TaskStatus.PENDING,
+            TaskStatus.CANCELLED,
         }
     ),
     TaskStatus.IN_REVIEW: frozenset(
-        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED}
+        {
+            TaskStatus.PENDING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.COMPLETED,
+            TaskStatus.BLOCKED,
+            TaskStatus.CANCELLED,
+        }
     ),
-    TaskStatus.BLOCKED: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),
-    TaskStatus.ON_HOLD: frozenset({TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED}),
+    TaskStatus.BLOCKED: frozenset(
+        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED, TaskStatus.CANCELLED}
+    ),
+    TaskStatus.ON_HOLD: frozenset(
+        {TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.QUEUED, TaskStatus.CANCELLED}
+    ),
     TaskStatus.COMPLETED: frozenset(),
     TaskStatus.CONSOLIDATED: frozenset(),
+    TaskStatus.CANCELLED: frozenset(),
 }
 
 PHASE_TRANSITIONS: Mapping[LifecyclePhase, frozenset[LifecyclePhase]] = {

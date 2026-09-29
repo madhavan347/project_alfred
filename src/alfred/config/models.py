@@ -35,8 +35,15 @@ class AgentConfig:
     alias: str
     runtime_target: str
     commands: CommandConfig
+    models: tuple[str, ...] = ()
+    default_model: str = ""
 
     def __post_init__(self) -> None:
+        if self.models and self.default_model and self.default_model not in self.models:
+            raise ValueError(
+                f"default_model {self.default_model!r} is not one of the agent's models: "
+                f"{', '.join(self.models)}"
+            )
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", self.alias):
             raise ValueError(
                 "Agent alias must start with an alphanumeric character and contain only "
@@ -137,6 +144,13 @@ class KnowledgeConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SkillsConfig:
+    """Location of the editable plan and execution skill files."""
+
+    directory: Path = Path(".alfred/skills")
+
+
+@dataclass(frozen=True, slots=True)
 class AlfredConfig:
     """Complete validated configuration for one Alfred workspace."""
 
@@ -147,4 +161,5 @@ class AlfredConfig:
     trackers: TrackerConfig = field(default_factory=TrackerConfig)
     commits: CommitConfig = field(default_factory=CommitConfig)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
     version: int = CONFIG_VERSION

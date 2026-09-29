@@ -29,8 +29,19 @@ class StateMachineTests(unittest.TestCase):
     def test_every_active_status_can_return_to_pending_but_terminal_ones_cannot(self) -> None:
         for status in TaskStatus:
             with self.subTest(status=status):
-                terminal = status in {TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED}
+                terminal = status in {
+                    TaskStatus.COMPLETED,
+                    TaskStatus.CONSOLIDATED,
+                    TaskStatus.CANCELLED,
+                }
                 self.assertEqual(can_transition(status, TaskStatus.PENDING), not terminal)
+
+    def test_every_non_terminal_status_can_be_cancelled(self) -> None:
+        for status in TaskStatus:
+            with self.subTest(status=status):
+                terminal = status in {TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED}
+                cancellable = can_transition(status, TaskStatus.CANCELLED)
+                self.assertEqual(cancellable, not terminal)
 
     def test_phase_flow_is_explicit(self) -> None:
         self.assertTrue(

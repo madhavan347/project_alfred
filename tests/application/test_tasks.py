@@ -9,8 +9,16 @@ from zoneinfo import ZoneInfo
 from alfred.adapters.markdown import DisabledTracker
 from alfred.adapters.state import JsonStateStore
 from alfred.application.tasks import TaskService
-from alfred.domain.constants import DispatchMode, LifecyclePhase, RunStatus, TaskStatus
+from alfred.domain.constants import (
+    DispatchMode,
+    LifecyclePhase,
+    RunStatus,
+    TaskStatus,
+    TaskType,
+    WorktreeMode,
+)
 from alfred.domain.models import AgentRun, Task
+from alfred.domain.state_machine import TransitionError
 from alfred.utils.time import Clock
 
 
@@ -35,6 +43,7 @@ class TaskServiceTests(unittest.TestCase):
             FixedClock(ZoneInfo("UTC")),
             agent_aliases=("builder", "reviewer"),
             repository_names=("api", "web"),
+            agent_models={"builder": ("fast", "big")},
         )
 
     def tearDown(self) -> None:
@@ -231,3 +240,54 @@ class TaskServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_cancel_archives_the_task_from_any_active_status(self) -> None:
+        for status in (TaskStatus.PENDING, TaskStatus.BLOCKED, TaskStatus.IN_REVIEW):
+            with self.subTest(status=status):
+                task = self.task()
+                task.status = status
+                self.service.upsert(task)
+                cancelled = self.service.cancel(7, "No longer needed")
+                self.assertEqual(cancelled.status, TaskStatus.CANCELLED)
+                self.assertEqual(cancelled.lifecycle_phase, LifecyclePhase.ARCHIVED)
+                self.assertEqual(self.service.events(7)[-1].event_type, "STATUS_CANCELLED")
+
+    def test_cancel_requires_reason_and_rejects_terminal_tasks(self) -> None:
+        self.service.upsert(self.task())
+        with self.assertRaisesRegex(ValueError, "reason"):
+            self.service.cancel(7, " ")
+        self.service.cancel(7, "Abandoned")
+        with self.assertRaises(TransitionError):
+            self.service.cancel(7, "Again")
+
+    def test_cancel_is_refused_while_a_run_is_active(self) -> None:
+        self.service.upsert(self.task())
+        run = AgentRun("r1", 7, "builder", "local", RunStatus.RUNNING)
+        self.store.save_runs([run.to_dict()])
+        with self.assertRaisesRegex(TransitionError, "active run"):
+            self.service.cancel(7, "Abandoned")
+
+    def test_research_task_needs_no_branch_and_disables_worktrees(self) -> None:
+        task = Task(task_number=8, title="Survey", description="Compare options")
+        task.task_type = TaskType.RESEARCH
+        saved = self.service.upsert(task)
+        self.assertEqual(saved.worktree_mode, WorktreeMode.DISABLED)
+        self.assertEqual(self.service.require(8).task_type, TaskType.RESEARCH)
+        legacy = self.store.tasks()
+        legacy[0].pop("task_type")
+        self.store.save_tasks(legacy)
+        self.assertEqual(self.service.require(8).task_type, TaskType.DEVELOPMENT)
+
+    def test_model_must_be_one_of_the_assigned_agents_models(self) -> None:
+        task = self.task()
+        task.assigned_agent_alias = "builder"
+        task.model = "huge"
+        with self.assertRaisesRegex(ValueError, "configured models: fast, big"):
+            self.service.upsert(task)
+        task.model = "big"
+        self.service.upsert(task)
+        with self.assertRaisesRegex(ValueError, "not available"):
+            self.service.assign(7, "builder", model="tiny")
+        self.assertEqual(self.service.assign(7, "builder", model="fast").model, "fast")
+        # An agent without a configured list accepts any model.
+        self.assertEqual(self.service.assign(7, "reviewer", model="anything").model, "anything")

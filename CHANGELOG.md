@@ -16,6 +16,12 @@ claim Semantic Versioning compatibility until its first supported release.
 - Non-destructive legacy JSON migration with backups and idempotent markers.
 - macOS-oriented installable CLI, strict quality checks, and public-project documentation.
 - Complete operator-flow documentation and an isolated end-to-end release test runbook.
+- `task cancel` abandons a task at any non-terminal stage; `task rename-branch` renames the task
+  branch and its worktree branches; `research` and `analysis` task types need no branch.
+- Reassigning an agent saves the old session's transcript and hands a summary to the next agent;
+  transcripts are also saved on stop and completion and offered to the learner.
+- Per-task `--model` with a `{model}` command placeholder, and editable per-phase skills
+  (`alfred skill`).
 
 ### Fixed
 

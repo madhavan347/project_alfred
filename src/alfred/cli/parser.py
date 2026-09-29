@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from alfred import __version__
-from alfred.domain.constants import KnowledgeCategory, RunStatus
+from alfred.domain.constants import KnowledgeCategory, PromptPhase, RunStatus, TaskType
 
 KNOWLEDGE_CATEGORIES = tuple(category.value for category in KnowledgeCategory)
 
@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     _worktree_parser(resources)
     _sync_parser(resources)
     _knowledge_parser(resources)
+    _skill_parser(resources)
     _report_parser(resources)
     _coordinator_parser(resources)
     _learner_parser(resources)
@@ -45,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_TASK_TYPES = tuple(task_type.value for task_type in TaskType)
+
+
 def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     task = resources.add_parser("task", help="manage the task lifecycle")
     actions = task.add_subparsers(dest="action", required=True)
@@ -53,6 +57,8 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     create.add_argument("--title", required=True)
     create.add_argument("--description", required=True)
     create.add_argument("--category", default="General")
+    create.add_argument("--type", choices=_TASK_TYPES, default="development")
+    create.add_argument("--model", default="", help="model for the {model} command placeholder")
     create.add_argument("--priority", default="P2")
     create.add_argument("--deadline", default="")
     create.add_argument("--notes", default="")
@@ -60,7 +66,11 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     create.add_argument("--dispatch", choices=("auto", "queued"), default="auto")
     create.add_argument("--branch", default="")
     create.add_argument("--mode", choices=("direct", "plan-execution"), default="direct")
-    create.add_argument("--worktree", choices=("enabled", "disabled"), default="enabled")
+    create.add_argument(
+        "--worktree",
+        choices=("enabled", "disabled"),
+        help="defaults to disabled for research and analysis tasks, otherwise enabled",
+    )
     create.add_argument("--repos", default="", help="comma-separated repository names")
     create.add_argument("--dependencies", default="", help="comma-separated task numbers")
 
@@ -68,6 +78,8 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     update.add_argument("--task", type=int, required=True)
     for name in ("title", "description", "category", "priority", "deadline", "notes", "branch"):
         update.add_argument(f"--{name}")
+    update.add_argument("--type", choices=_TASK_TYPES)
+    update.add_argument("--model")
     update.add_argument("--mode", choices=("direct", "plan-execution"))
     update.add_argument("--worktree", choices=("enabled", "disabled"))
     update.add_argument("--repos")
@@ -92,6 +104,13 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     archive.add_argument("--note", default="")
     consolidate = _task_actor_action(actions, "consolidate")
     consolidate.add_argument("--note", default="")
+    rename = _task_actor_action(actions, "rename-branch")
+    rename.add_argument("--branch", required=True)
+    rename.add_argument("--force", action="store_true")
+    cancel = _task_actor_action(actions, "cancel")
+    cancel.add_argument("--reason", required=True)
+    cancel.add_argument("--cleanup", choices=("ask", "yes", "no"), default="no")
+    cancel.add_argument("--force", action="store_true")
 
 
 def _task_actor_action(
@@ -112,6 +131,7 @@ def _agent_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]
         command.add_argument("--task", type=int, required=True)
         command.add_argument("--to", required=True)
         command.add_argument("--actor", default="manager")
+        command.add_argument("--model", help="also set the task's model for the new agent")
         if name == "assign":
             command.add_argument("--dispatch", choices=("auto", "queued"))
         else:
@@ -225,6 +245,22 @@ def _knowledge_parser(resources: argparse._SubParsersAction[argparse.ArgumentPar
     add.add_argument("--modules", default="", help="related repository names")
     listing = actions.add_parser("list")
     listing.add_argument("--category", choices=KNOWLEDGE_CATEGORIES)
+
+
+def _skill_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    skill = resources.add_parser("skill", help="manage plan and execution skills")
+    actions = skill.add_subparsers(dest="action", required=True)
+    actions.add_parser("list")
+    phases = tuple(phase.value for phase in PromptPhase)
+    show = actions.add_parser("show")
+    show.add_argument("--phase", choices=phases, required=True)
+    edit = actions.add_parser("set", help="create or replace a skill from text or a file")
+    edit.add_argument("--phase", choices=phases, required=True)
+    source = edit.add_mutually_exclusive_group(required=True)
+    source.add_argument("--content")
+    source.add_argument("--file", type=Path)
+    remove = actions.add_parser("remove", help="fall back to the built-in instructions")
+    remove.add_argument("--phase", choices=phases, required=True)
 
 
 def _report_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

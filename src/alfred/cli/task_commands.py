@@ -3,11 +3,13 @@
 import argparse
 
 from alfred.bootstrap import AlfredServices
+from alfred.cli.run_commands import cleanup_requested
 from alfred.domain.constants import (
     DispatchMode,
     ExecutionMode,
     LifecyclePhase,
     PlanningState,
+    TaskType,
     WorktreeMode,
 )
 from alfred.domain.models import Task
@@ -21,13 +23,15 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             title=args.title,
             description=args.description,
             category=args.category,
+            task_type=TaskType(args.type),
+            model=args.model.strip(),
             priority=args.priority,
             deadline=args.deadline,
             notes=args.notes,
             assigned_agent_alias=args.assign,
             dispatch_mode=DispatchMode(args.dispatch),
             execution_mode=ExecutionMode(args.mode),
-            worktree_mode=WorktreeMode(args.worktree),
+            worktree_mode=WorktreeMode(args.worktree or WorktreeMode.ENABLED),
             branch_name=args.branch.strip(),
             planning_state=(
                 PlanningState.PENDING
@@ -48,7 +52,13 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             if value is not None:
                 setattr(task, field, value)
         if args.branch is not None:
+            # Renames the Git branch in existing worktrees too, then reloads the stored task.
+            services.runs.rename_branch(args.task, args.branch)
             task.branch_name = args.branch.strip()
+        if args.model is not None:
+            task.model = args.model.strip()
+        if args.type is not None:
+            task.task_type = TaskType(args.type)
         if args.mode is not None:
             task.execution_mode = ExecutionMode(args.mode)
             task.planning_state = (
@@ -92,6 +102,18 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             args.note or "Archived after completion.",
             actor=args.actor,
         )
+    elif args.action == "rename-branch":
+        task = services.runs.rename_branch(
+            args.task, args.branch, actor=args.actor, force=args.force
+        )
+    elif args.action == "cancel":
+        task = services.runs.cancel(
+            args.task,
+            args.reason,
+            actor=args.actor,
+            cleanup=cleanup_requested(args.cleanup),
+            force=args.force,
+        )
     elif args.action == "consolidate":
         task = services.tasks.update_phase(
             args.task,
@@ -111,19 +133,24 @@ def handle_agent(args: argparse.Namespace, services: AlfredServices) -> int:
         task = services.tasks.require(args.task)
         print(f"Task {task.task_number} agent: {task.assigned_agent_alias or '-'}")
         return 0
-    if (
-        args.action == "reassign"
-        and args.mode == "stop-and-switch"
-        and services.runs.active(args.task) is not None
-    ):
-        services.runs.stop(args.task, "Agent reassigned.", actor=args.actor)
     dispatch = DispatchMode(args.dispatch) if getattr(args, "dispatch", None) else None
-    task = services.tasks.assign(
-        args.task,
-        args.to,
-        actor=args.actor,
-        dispatch_mode=dispatch,
-    )
+    if args.action == "reassign":
+        task = services.runs.reassign(
+            args.task,
+            args.to,
+            actor=args.actor,
+            stop_run=args.mode == "stop-and-switch",
+            dispatch_mode=dispatch,
+            model=args.model,
+        )
+    else:
+        task = services.tasks.assign(
+            args.task,
+            args.to,
+            actor=args.actor,
+            dispatch_mode=dispatch,
+            model=args.model,
+        )
     print(f"Task {task.task_number} assigned to {task.assigned_agent_alias}")
     return 0
 
