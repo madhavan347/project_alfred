@@ -29,6 +29,7 @@ from alfred.config.models import (
     MarkdownTrackerConfig,
     RepositoryConfig,
     RuntimeConfig,
+    SkillsConfig,
     TrackerConfig,
     WorkspaceConfig,
 )
@@ -82,6 +83,7 @@ def load_config(path: Path) -> AlfredConfig:
             "trackers",
             "commit",
             "knowledge",
+            "skills",
         },
         "configuration",
     )
@@ -140,6 +142,7 @@ def load_config(path: Path) -> AlfredConfig:
     trackers = _load_trackers(_table(payload, "trackers"), workspace_root)
     commits = _load_commits(_table(payload, "commit"))
     knowledge = _load_knowledge(_table(payload, "knowledge"), workspace_root)
+    skills = _load_skills(_table(payload, "skills"), workspace_root)
 
     return AlfredConfig(
         config_path=config_path,
@@ -149,6 +152,7 @@ def load_config(path: Path) -> AlfredConfig:
         trackers=trackers,
         commits=commits,
         knowledge=knowledge,
+        skills=skills,
         version=version,
     )
 
@@ -244,6 +248,13 @@ def _load_knowledge(value: Mapping[str, Any], root: Path) -> KnowledgeConfig:
     return KnowledgeConfig(
         directory=_resolve_path(_string(value, "directory", default=".alfred/knowledge"), root),
         required_completion_entries=_integer(value, "required_completion_entries", default=0),
+    )
+
+
+def _load_skills(value: Mapping[str, Any], root: Path) -> SkillsConfig:
+    _reject_unknown(value, {"directory"}, "skills")
+    return SkillsConfig(
+        directory=_resolve_path(_string(value, "directory", default=".alfred/skills"), root)
     )
 
 

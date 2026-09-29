@@ -144,6 +144,13 @@ class KnowledgeConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SkillsConfig:
+    """Location of the editable plan and execution skill files."""
+
+    directory: Path = Path(".alfred/skills")
+
+
+@dataclass(frozen=True, slots=True)
 class AlfredConfig:
     """Complete validated configuration for one Alfred workspace."""
 
@@ -154,4 +161,5 @@ class AlfredConfig:
     trackers: TrackerConfig = field(default_factory=TrackerConfig)
     commits: CommitConfig = field(default_factory=CommitConfig)
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
     version: int = CONFIG_VERSION

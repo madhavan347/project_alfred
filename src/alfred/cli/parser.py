@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from alfred import __version__
-from alfred.domain.constants import KnowledgeCategory, RunStatus, TaskType
+from alfred.domain.constants import KnowledgeCategory, PromptPhase, RunStatus, TaskType
 
 KNOWLEDGE_CATEGORIES = tuple(category.value for category in KnowledgeCategory)
 
@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     _worktree_parser(resources)
     _sync_parser(resources)
     _knowledge_parser(resources)
+    _skill_parser(resources)
     _report_parser(resources)
     _coordinator_parser(resources)
     _learner_parser(resources)
@@ -244,6 +245,22 @@ def _knowledge_parser(resources: argparse._SubParsersAction[argparse.ArgumentPar
     add.add_argument("--modules", default="", help="related repository names")
     listing = actions.add_parser("list")
     listing.add_argument("--category", choices=KNOWLEDGE_CATEGORIES)
+
+
+def _skill_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    skill = resources.add_parser("skill", help="manage plan and execution skills")
+    actions = skill.add_subparsers(dest="action", required=True)
+    actions.add_parser("list")
+    phases = tuple(phase.value for phase in PromptPhase)
+    show = actions.add_parser("show")
+    show.add_argument("--phase", choices=phases, required=True)
+    edit = actions.add_parser("set", help="create or replace a skill from text or a file")
+    edit.add_argument("--phase", choices=phases, required=True)
+    source = edit.add_mutually_exclusive_group(required=True)
+    source.add_argument("--content")
+    source.add_argument("--file", type=Path)
+    remove = actions.add_parser("remove", help="fall back to the built-in instructions")
+    remove.add_argument("--phase", choices=phases, required=True)
 
 
 def _report_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

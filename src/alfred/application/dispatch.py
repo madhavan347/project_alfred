@@ -7,6 +7,7 @@ from pathlib import Path
 from string import Formatter
 
 from alfred.application.handoff import HandoffStore
+from alfred.application.skills import SkillService
 from alfred.config.models import AgentConfig, AlfredConfig
 from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
@@ -38,6 +39,7 @@ class PromptBuilder:
         phase: PromptPhase,
         worktree_paths: dict[str, Path],
         handoff: str = "",
+        skill: str = "",
     ) -> str:
         """Render task, phase, paths, and lifecycle commands."""
         repository_lines = [f"- {name}: {path}" for name, path in sorted(worktree_paths.items())]
@@ -85,6 +87,7 @@ class PromptBuilder:
         branch_line = (
             [f"Branch: {task.branch_name or '-'}"] if task.task_type == TaskType.DEVELOPMENT else []
         )
+        skill_lines = [f"## Skill: {phase.value}", "", skill.strip(), ""] if skill.strip() else []
         handoff_lines = (
             ["## Handoff from previous agent", "", handoff.strip(), ""] if handoff else []
         )
@@ -106,6 +109,7 @@ class PromptBuilder:
             "",
             instruction,
             "",
+            *skill_lines,
             "## Working directories",
             "",
             *repository_lines,
@@ -145,6 +149,7 @@ class AgentDispatcher:
         self.builder = PromptBuilder(config)
         self.prompts = prompts or PromptStore(config.runtime.temp_directory)
         self.handoffs = HandoffStore(config.runtime.temp_directory)
+        self.skills = SkillService(config.skills.directory)
 
     def dispatch(
         self,
@@ -156,7 +161,11 @@ class AgentDispatcher:
         agent = self._agent(task.assigned_agent_alias)
         workdir = next(iter(worktree_paths.values()), self.config.workspace.root)
         prompt = self.builder.build(
-            task, phase, worktree_paths, self.handoffs.read(task.task_number)
+            task,
+            phase,
+            worktree_paths,
+            self.handoffs.read(task.task_number),
+            self.skills.get(phase),
         )
         prompt_file = self.prompts.write(task.task_number, phase, prompt)
         command = _render_command(agent, task, phase, workdir, prompt, prompt_file)
