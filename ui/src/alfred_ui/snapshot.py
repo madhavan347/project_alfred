@@ -37,7 +37,7 @@ from alfred_ui.tmux_inspector import SessionInfo, TmuxInspector
 from alfred_ui.transcripts import TranscriptStore
 from alfred_ui.workspace import NoWorkspaceError, WorkspaceContext
 
-TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED})
+TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.CONSOLIDATED, TaskStatus.CANCELLED})
 TERMINAL_PHASES = frozenset({LifecyclePhase.ARCHIVED, LifecyclePhase.CONSOLIDATED})
 EVENT_TAIL = 400
 AGENT_CHANGE = re.compile(r"Agent changed from (\S+) to (\S+)\.")

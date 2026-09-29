@@ -354,6 +354,25 @@ class RunServiceTests(unittest.TestCase):
         )
         self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
 
+    def test_cancel_stops_the_live_run_and_archives_the_task(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        task = self.service.cancel(7, "Wrong approach", cleanup=True)
+        self.assertEqual(task.status, TaskStatus.CANCELLED)
+        self.assertEqual(self.sessions.names, set())
+        self.assertEqual(self.worktrees.cleaned, 1)
+        self.assertEqual(self.store.queue(), [])
+        self.assertEqual(self.service.list(7)[-1].run_status, RunStatus.STOPPED)
+
+    def test_cancel_without_a_run_and_dirty_cleanup_guard(self) -> None:
+        self.add_task()
+        self.worktrees.changes = "?? notes.txt"
+        with self.assertRaisesRegex(ValueError, "uncommitted changes"):
+            self.service.cancel(7, "Drop it", cleanup=True)
+        self.assertEqual(self.tasks.require(7).status, TaskStatus.PENDING)
+        task = self.service.cancel(7, "Drop it", cleanup=True, force=True)
+        self.assertEqual(task.status, TaskStatus.CANCELLED)
+
     def test_stopped_task_can_be_reopened(self) -> None:
         self.add_task()
         first = self.service.trigger((7,))[0]

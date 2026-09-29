@@ -279,6 +279,24 @@ class TaskService:
             note or f"Lifecycle moved to {phase.value}.",
         )
 
+    def cancel(self, task_number: int, reason: str, *, actor: str = "manager") -> Task:
+        """Abandon a task at any non-terminal stage and archive it.
+
+        A live run must be stopped first so its session and worktrees are not orphaned.
+        """
+        if not reason.strip():
+            raise ValueError("Cancel reason is required")
+        task = self.require(task_number)
+        self._require_no_active_run(task_number, "cancel")
+        require_transition(task.status, TaskStatus.CANCELLED)
+        if task.lifecycle_phase in {LifecyclePhase.ARCHIVED, LifecyclePhase.CONSOLIDATED}:
+            raise TransitionError(f"Task {task_number} is already {task.lifecycle_phase}")
+        task.status = TaskStatus.CANCELLED
+        task.lifecycle_phase = LifecyclePhase.ARCHIVED
+        task.notes = reason
+        task.updated_at = self.clock.timestamp()
+        return self._commit(task, actor, "STATUS_CANCELLED", reason)
+
     def _approved_since_last_work(self, task_number: int) -> bool:
         """Return whether a human approval follows the task's most recent work or status change.
 
