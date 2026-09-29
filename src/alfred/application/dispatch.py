@@ -7,7 +7,7 @@ from pathlib import Path
 from string import Formatter
 
 from alfred.config.models import AgentConfig, AlfredConfig
-from alfred.domain.constants import ExecutionMode, PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
 from alfred.ports.session import SessionBackend
 from alfred.utils.files import atomic_write_text
@@ -50,6 +50,11 @@ class PromptBuilder:
             )
         if phase == PromptPhase.PLAN:
             instruction = "Produce an implementation plan only and wait for approval."
+        elif task.task_type != TaskType.DEVELOPMENT:
+            instruction = (
+                f"Perform the {task.task_type!s} task without creating a branch or commits, "
+                "and report the findings in the completion note."
+            )
         elif task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             instruction = "Implement the approved plan, validate it, and report completion."
         else:
@@ -75,11 +80,15 @@ class PromptBuilder:
                 f"--note <summary> --actor {actor}",
             )
         notes = ["## Latest notes", "", task.notes, ""] if task.notes.strip() else []
+        branch_line = (
+            [f"Branch: {task.branch_name or '-'}"] if task.task_type == TaskType.DEVELOPMENT else []
+        )
         lines = [
             f"# Task {task.task_number}: {task.title}",
             "",
             f"Agent: {task.assigned_agent_alias or 'unassigned'}",
-            f"Branch: {task.branch_name or '-'}",
+            *branch_line,
+            f"Type: {task.task_type!s}",
             f"Mode: {task.execution_mode!s}",
             "",
             "## Description",

@@ -16,6 +16,12 @@ class TaskStatus(StrEnum):
     CANCELLED = "Cancelled"
 
 
+class TaskType(StrEnum):
+    DEVELOPMENT = "development"
+    RESEARCH = "research"
+    ANALYSIS = "analysis"
+
+
 class DispatchMode(StrEnum):
     AUTO = "auto"
     QUEUED = "queued"

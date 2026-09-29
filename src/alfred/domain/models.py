@@ -11,6 +11,7 @@ from alfred.domain.constants import (
     PlanningState,
     RunStatus,
     TaskStatus,
+    TaskType,
     WorktreeMode,
 )
 
@@ -23,6 +24,7 @@ class Task:
     title: str
     description: str
     category: str = "General"
+    task_type: TaskType = TaskType.DEVELOPMENT
     priority: str = "P2"
     status: TaskStatus = TaskStatus.PENDING
     deadline: str = ""
@@ -54,6 +56,7 @@ class Task:
             "updated_at_ist", normalized.get("updated_at", "")
         )
         normalized.setdefault("target_repositories", normalized.pop("repos", []))
+        normalized["task_type"] = TaskType(normalized.get("task_type", TaskType.DEVELOPMENT))
         normalized["status"] = TaskStatus(normalized.get("status", TaskStatus.PENDING))
         normalized["dispatch_mode"] = DispatchMode(
             normalized.get("dispatch_mode", DispatchMode.AUTO)

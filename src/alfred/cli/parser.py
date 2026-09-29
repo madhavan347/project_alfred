@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from alfred import __version__
-from alfred.domain.constants import KnowledgeCategory, RunStatus
+from alfred.domain.constants import KnowledgeCategory, RunStatus, TaskType
 
 KNOWLEDGE_CATEGORIES = tuple(category.value for category in KnowledgeCategory)
 
@@ -45,6 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_TASK_TYPES = tuple(task_type.value for task_type in TaskType)
+
+
 def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     task = resources.add_parser("task", help="manage the task lifecycle")
     actions = task.add_subparsers(dest="action", required=True)
@@ -53,6 +56,7 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     create.add_argument("--title", required=True)
     create.add_argument("--description", required=True)
     create.add_argument("--category", default="General")
+    create.add_argument("--type", choices=_TASK_TYPES, default="development")
     create.add_argument("--priority", default="P2")
     create.add_argument("--deadline", default="")
     create.add_argument("--notes", default="")
@@ -60,7 +64,11 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     create.add_argument("--dispatch", choices=("auto", "queued"), default="auto")
     create.add_argument("--branch", default="")
     create.add_argument("--mode", choices=("direct", "plan-execution"), default="direct")
-    create.add_argument("--worktree", choices=("enabled", "disabled"), default="enabled")
+    create.add_argument(
+        "--worktree",
+        choices=("enabled", "disabled"),
+        help="defaults to disabled for research and analysis tasks, otherwise enabled",
+    )
     create.add_argument("--repos", default="", help="comma-separated repository names")
     create.add_argument("--dependencies", default="", help="comma-separated task numbers")
 
@@ -68,6 +76,7 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     update.add_argument("--task", type=int, required=True)
     for name in ("title", "description", "category", "priority", "deadline", "notes", "branch"):
         update.add_argument(f"--{name}")
+    update.add_argument("--type", choices=_TASK_TYPES)
     update.add_argument("--mode", choices=("direct", "plan-execution"))
     update.add_argument("--worktree", choices=("enabled", "disabled"))
     update.add_argument("--repos")

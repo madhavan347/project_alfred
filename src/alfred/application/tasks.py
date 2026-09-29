@@ -9,6 +9,8 @@ from alfred.domain.constants import (
     LifecyclePhase,
     PlanningState,
     TaskStatus,
+    TaskType,
+    WorktreeMode,
 )
 from alfred.domain.models import AgentRun, Task, TaskEvent
 from alfred.domain.state_machine import (
@@ -74,6 +76,9 @@ class TaskService:
                 task.planning_state = PlanningState.PENDING
         else:
             task.planning_state = PlanningState.NOT_REQUIRED
+        if task.task_type != TaskType.DEVELOPMENT:
+            # Research and analysis produce findings, not commits, so they never need a branch.
+            task.worktree_mode = WorktreeMode.DISABLED
         if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:
             # Only work that has not started becomes eligible for `run trigger --all`.
             task.status = TaskStatus.QUEUED
