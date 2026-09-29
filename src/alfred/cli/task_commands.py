@@ -130,19 +130,22 @@ def handle_agent(args: argparse.Namespace, services: AlfredServices) -> int:
         task = services.tasks.require(args.task)
         print(f"Task {task.task_number} agent: {task.assigned_agent_alias or '-'}")
         return 0
-    if (
-        args.action == "reassign"
-        and args.mode == "stop-and-switch"
-        and services.runs.active(args.task) is not None
-    ):
-        services.runs.stop(args.task, "Agent reassigned.", actor=args.actor)
     dispatch = DispatchMode(args.dispatch) if getattr(args, "dispatch", None) else None
-    task = services.tasks.assign(
-        args.task,
-        args.to,
-        actor=args.actor,
-        dispatch_mode=dispatch,
-    )
+    if args.action == "reassign":
+        task = services.runs.reassign(
+            args.task,
+            args.to,
+            actor=args.actor,
+            stop_run=args.mode == "stop-and-switch",
+            dispatch_mode=dispatch,
+        )
+    else:
+        task = services.tasks.assign(
+            args.task,
+            args.to,
+            actor=args.actor,
+            dispatch_mode=dispatch,
+        )
     print(f"Task {task.task_number} assigned to {task.assigned_agent_alias}")
     return 0
 

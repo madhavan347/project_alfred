@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from string import Formatter
 
+from alfred.application.handoff import HandoffStore
 from alfred.config.models import AgentConfig, AlfredConfig
 from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
@@ -36,6 +37,7 @@ class PromptBuilder:
         task: Task,
         phase: PromptPhase,
         worktree_paths: dict[str, Path],
+        handoff: str = "",
     ) -> str:
         """Render task, phase, paths, and lifecycle commands."""
         repository_lines = [f"- {name}: {path}" for name, path in sorted(worktree_paths.items())]
@@ -83,6 +85,9 @@ class PromptBuilder:
         branch_line = (
             [f"Branch: {task.branch_name or '-'}"] if task.task_type == TaskType.DEVELOPMENT else []
         )
+        handoff_lines = (
+            ["## Handoff from previous agent", "", handoff.strip(), ""] if handoff else []
+        )
         lines = [
             f"# Task {task.task_number}: {task.title}",
             "",
@@ -96,6 +101,7 @@ class PromptBuilder:
             task.description or "(no description)",
             "",
             *notes,
+            *handoff_lines,
             f"## Phase: {phase.value.upper()}",
             "",
             instruction,
@@ -138,6 +144,7 @@ class AgentDispatcher:
         self.sessions = sessions
         self.builder = PromptBuilder(config)
         self.prompts = prompts or PromptStore(config.runtime.temp_directory)
+        self.handoffs = HandoffStore(config.runtime.temp_directory)
 
     def dispatch(
         self,
@@ -148,7 +155,9 @@ class AgentDispatcher:
         """Start or reuse a task session, or queue when configured to do so."""
         agent = self._agent(task.assigned_agent_alias)
         workdir = next(iter(worktree_paths.values()), self.config.workspace.root)
-        prompt = self.builder.build(task, phase, worktree_paths)
+        prompt = self.builder.build(
+            task, phase, worktree_paths, self.handoffs.read(task.task_number)
+        )
         prompt_file = self.prompts.write(task.task_number, phase, prompt)
         command = _render_command(agent, task, phase, workdir, prompt, prompt_file)
         session_name = f"{self.config.runtime.session_prefix}-{task.task_number}-{agent.alias}"
@@ -163,6 +172,7 @@ class AgentDispatcher:
             self.sessions.create(session_name, workdir, command)
         if reused or not _delivers_prompt(_template(agent, phase)):
             self.sessions.send_prompt(session_name, prompt_file)
+        self.handoffs.clear(task.task_number)
         return DispatchOutcome(session_name, prompt_file, preview, True, reused, False)
 
     def preflight(self, task: Task, phase: PromptPhase) -> None:

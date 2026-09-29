@@ -185,11 +185,9 @@ def assign_agent(services: AlfredServices, number: int, body: schemas.AssignBody
 
 def reassign_agent(services: AlfredServices, number: int, body: schemas.ReassignBody) -> Result:
     """``alfred agent reassign``, stopping the active run first for stop-and-switch."""
-    stopped = False
-    if body.mode == "stop-and-switch" and services.runs.active(number) is not None:
-        services.runs.stop(number, "Agent reassigned.", actor=body.actor)
-        stopped = True
-    task = services.tasks.assign(number, body.agent, actor=body.actor)
+    stop_run = body.mode == "stop-and-switch"
+    stopped = stop_run and services.runs.active(number) is not None
+    task = services.runs.reassign(number, body.agent, actor=body.actor, stop_run=stop_run)
     message = f"Task {task.task_number} assigned to {task.assigned_agent_alias}"
     if stopped:
         message = f"Stopped the active run. {message}"

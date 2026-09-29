@@ -62,6 +62,9 @@ class RecordingSessions:
     def send_prompt(self, name: str, prompt_file: Path) -> None:
         self.prompts.append((name, prompt_file))
 
+    def capture(self, name: str) -> str:
+        return f"output of {name}\n"
+
     def stop(self, name: str) -> None:
         self.names.discard(name)
 
@@ -410,6 +413,35 @@ class RunServiceTests(unittest.TestCase):
             [("feature/example", "feature/renamed"), ("feature/renamed", "feature/example")],
         )
         self.assertEqual(self.tasks.require(7).branch_name, "feature/example")
+
+    def test_reassign_captures_a_handoff_for_the_next_agent_prompt(self) -> None:
+        self.add_task()
+        run = self.service.trigger((7,))[0]
+        self.tasks.assign(7, "builder")
+        task = self.service.reassign(7, "builder", stop_run=True)
+        self.assertEqual(task.assigned_agent_alias, "builder")
+        transcripts = sorted((self.root / "temp/transcripts/task-7").glob("*reassign*.txt"))
+        self.assertEqual(len(transcripts), 1)
+        self.assertEqual(transcripts[0].read_text(), f"output of {run.session_name}\n")
+        handoff = self.service.handoffs.read(7)
+        self.assertIn("Previous agent: builder", handoff)
+        self.assertIn("Recent session output", handoff)
+        self.assertIn(str(transcripts[0]), handoff)
+        self.assertEqual(self.service.list(7)[-1].run_status, RunStatus.STOPPED)
+        self.service.trigger((7,))
+        prompt = (self.root / "temp/prompts/task-7-execution.md").read_text()
+        self.assertIn("## Handoff from previous agent", prompt)
+        self.assertEqual(self.service.handoffs.read(7), "")
+
+    def test_stop_and_complete_save_transcripts_and_survive_capture_failure(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        self.service.complete(7, "success", "Done", actor="agent:builder")
+        self.assertEqual(len(list((self.root / "temp/transcripts/task-7").glob("*complete*"))), 1)
+        self.sessions.capture = lambda name: (_ for _ in ()).throw(RuntimeError("boom"))  # type: ignore[method-assign]
+        self.service.reopen(7)
+        self.service.stop(7)
+        self.assertEqual(self.tasks.require(7).status, TaskStatus.PENDING)
 
     def test_stopped_task_can_be_reopened(self) -> None:
         self.add_task()

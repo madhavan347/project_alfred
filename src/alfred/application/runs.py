@@ -9,10 +9,12 @@ from alfred.adapters.completion import CompletionFileStore
 from alfred.adapters.git.worktrees import WorktreeStatus
 from alfred.adapters.state import JsonStateStore
 from alfred.application.dispatch import AgentDispatcher, DispatchOutcome
+from alfred.application.handoff import TranscriptStore
 from alfred.application.knowledge import KnowledgeService
 from alfred.application.tasks import TaskService
 from alfred.domain.constants import (
     CompletionStatus,
+    DispatchMode,
     ExecutionMode,
     PlanningState,
     PromptPhase,
@@ -78,6 +80,8 @@ class RunService:
         self.completions = completions
         self.knowledge = knowledge
         self.clock = clock
+        self.transcripts = TranscriptStore(dispatcher.config.runtime.temp_directory)
+        self.handoffs = dispatcher.handoffs
 
     def list(self, task_number: int | None = None) -> tuple[AgentRun, ...]:
         """Return persisted runs, optionally limited to one task."""
@@ -155,6 +159,7 @@ class RunService:
         timestamp = self.clock.timestamp()
         run_status = COMPLETION_RUN_STATUS[status]
         worktrees = self.worktrees.statuses(task_number)
+        self._capture_transcript(run, "complete")
         report = CompletionReport(
             task_number=task_number,
             agent=task.assigned_agent_alias,
@@ -198,6 +203,7 @@ class RunService:
         run = self._latest_active(task_number)
         if cleanup and not force:
             self._require_clean_worktrees(task_number)
+        self._capture_transcript(run, "stop")
         if (
             run.session_name
             and run.session_status == "active"
@@ -241,6 +247,70 @@ class RunService:
             self.worktrees.cleanup(task_number, force=force)
         self._update_queue(task_number, add=False)
         return self.tasks.cancel(task_number, reason, actor=actor)
+
+    def reassign(
+        self,
+        task_number: int,
+        agent_alias: str,
+        *,
+        actor: str = "manager",
+        stop_run: bool = False,
+        dispatch_mode: DispatchMode | None = None,
+    ) -> Task:
+        """Assign another agent and leave it a handoff from the previous agent's session."""
+        previous = self.tasks.require(task_number)
+        run = self.active(task_number)
+        transcript_path, transcript = (
+            self._capture_transcript(run, "reassign") if run else (None, "")
+        )
+        if run is not None and stop_run:
+            self.stop(task_number, "Agent reassigned.", actor=actor)
+        task = self.tasks.assign(task_number, agent_alias, actor=actor, dispatch_mode=dispatch_mode)
+        self.handoffs.write(
+            task_number,
+            self._handoff_text(previous, task_number, transcript_path, transcript),
+        )
+        return self.tasks.require(task.task_number)
+
+    def _handoff_text(
+        self,
+        task: Task,
+        task_number: int,
+        transcript_path: Path | None,
+        transcript: str,
+    ) -> str:
+        """Summarize where the previous agent left off for the next agent's prompt."""
+        runs = self.list(task_number)
+        last = runs[-1] if runs else None
+        lines = [f"Previous agent: {task.assigned_agent_alias or 'unassigned'}"]
+        if last is not None:
+            lines.append(f"Last run: {last.run_status} in the {last.phase} phase")
+            if last.summary:
+                lines.append(f"Last run summary: {last.summary}")
+        lines.extend(
+            f"Worktree {item.repository}: branch {item.branch}"
+            for item in self.worktrees.statuses(task_number)
+        )
+        if transcript_path is not None:
+            lines.append(f"Full transcript: {transcript_path}")
+        if transcript.strip():
+            lines.extend(["", "Recent session output:", "", TranscriptStore.tail(transcript)])
+        return "\n".join(lines)
+
+    def _capture_transcript(self, run: AgentRun, reason: str) -> tuple[Path | None, str]:
+        """Best-effort capture of a run's session output; a missing session yields nothing."""
+        if not run.session_name:
+            return None, ""
+        try:
+            if not self.sessions.exists(run.session_name):
+                return None, ""
+            text = self.sessions.capture(run.session_name)
+            path = self.transcripts.save(
+                run.task_number, self.clock.timestamp(), reason, run.session_name, text
+            )
+        except Exception:  # noqa: BLE001 - a capture failure must never block the lifecycle action
+            return None, ""
+        return path, text
 
     def rename_branch(
         self,

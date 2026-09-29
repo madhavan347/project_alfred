@@ -74,6 +74,17 @@ class TmuxSessionBackendTests(unittest.TestCase):
                 ],
             )
 
+    def test_capture_reads_the_full_scrollback(self) -> None:
+        runner = RecordingRunner([ProcessResult(("tmux",), 0, "line one\nline two\n", "")])
+        backend = TmuxSessionBackend(runner, executable_finder=lambda _: "/usr/bin/tmux")
+        self.assertEqual(backend.capture("alfred-task-7"), "line one\nline two\n")
+        self.assertEqual(
+            runner.calls[0][0],
+            ("tmux", "capture-pane", "-p", "-S", "-", "-t", "alfred-task-7"),
+        )
+        with self.assertRaises(ValueError):
+            backend.capture("bad name")
+
     def test_list_filters_prefix_and_handles_missing_server(self) -> None:
         result = ProcessResult(
             ("tmux",),
