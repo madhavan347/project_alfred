@@ -9,7 +9,14 @@ from zoneinfo import ZoneInfo
 from alfred.adapters.markdown import DisabledTracker
 from alfred.adapters.state import JsonStateStore
 from alfred.application.tasks import TaskService
-from alfred.domain.constants import DispatchMode, LifecyclePhase, RunStatus, TaskStatus
+from alfred.domain.constants import (
+    DispatchMode,
+    LifecyclePhase,
+    RunStatus,
+    TaskStatus,
+    TaskType,
+    WorktreeMode,
+)
 from alfred.domain.models import AgentRun, Task
 from alfred.domain.state_machine import TransitionError
 from alfred.utils.time import Clock
@@ -258,3 +265,14 @@ if __name__ == "__main__":
         self.store.save_runs([run.to_dict()])
         with self.assertRaisesRegex(TransitionError, "active run"):
             self.service.cancel(7, "Abandoned")
+
+    def test_research_task_needs_no_branch_and_disables_worktrees(self) -> None:
+        task = Task(task_number=8, title="Survey", description="Compare options")
+        task.task_type = TaskType.RESEARCH
+        saved = self.service.upsert(task)
+        self.assertEqual(saved.worktree_mode, WorktreeMode.DISABLED)
+        self.assertEqual(self.service.require(8).task_type, TaskType.RESEARCH)
+        legacy = self.store.tasks()
+        legacy[0].pop("task_type")
+        self.store.save_tasks(legacy)
+        self.assertEqual(self.service.require(8).task_type, TaskType.DEVELOPMENT)

@@ -14,7 +14,7 @@ from alfred.config.models import (
     RuntimeConfig,
     WorkspaceConfig,
 )
-from alfred.domain.constants import ExecutionMode, PromptPhase
+from alfred.domain.constants import ExecutionMode, PromptPhase, TaskType
 from alfred.domain.models import Task
 
 
@@ -88,6 +88,13 @@ class AgentDispatchTests(unittest.TestCase):
         execution_prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
         self.assertIn("--note <message> --actor agent:builder", execution_prompt)
         self.assertIn("--note <summary> --actor agent:builder", execution_prompt)
+
+    def test_research_prompt_omits_the_branch_and_forbids_commits(self) -> None:
+        self.task.task_type = TaskType.RESEARCH
+        prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
+        self.assertNotIn("Branch:", prompt)
+        self.assertIn("Type: research", prompt)
+        self.assertIn("without creating a branch or commits", prompt)
 
     def test_direct_prompt_does_not_reference_an_approved_plan(self) -> None:
         prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})

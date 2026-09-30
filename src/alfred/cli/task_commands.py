@@ -9,6 +9,7 @@ from alfred.domain.constants import (
     ExecutionMode,
     LifecyclePhase,
     PlanningState,
+    TaskType,
     WorktreeMode,
 )
 from alfred.domain.models import Task
@@ -22,13 +23,14 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             title=args.title,
             description=args.description,
             category=args.category,
+            task_type=TaskType(args.type),
             priority=args.priority,
             deadline=args.deadline,
             notes=args.notes,
             assigned_agent_alias=args.assign,
             dispatch_mode=DispatchMode(args.dispatch),
             execution_mode=ExecutionMode(args.mode),
-            worktree_mode=WorktreeMode(args.worktree),
+            worktree_mode=WorktreeMode(args.worktree or WorktreeMode.ENABLED),
             branch_name=args.branch.strip(),
             planning_state=(
                 PlanningState.PENDING
@@ -50,6 +52,8 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
                 setattr(task, field, value)
         if args.branch is not None:
             task.branch_name = args.branch.strip()
+        if args.type is not None:
+            task.task_type = TaskType(args.type)
         if args.mode is not None:
             task.execution_mode = ExecutionMode(args.mode)
             task.planning_state = (

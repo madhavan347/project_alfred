@@ -52,6 +52,16 @@ class TaskCommandTests(unittest.TestCase):
         self.assertEqual(self.call("task", "update", "--task", "7", "--title", "New")[0], 0)
         self.assertEqual(self.call("task", "start", "--task", "7")[0], 0)
 
+    def test_research_task_is_created_without_a_branch_and_can_be_cancelled(self) -> None:
+        code, _ = self.call(
+            "task", "create", "--task", "9", "--title", "Survey", "--description", "Compare",
+            "--type", "research",
+        )  # fmt: skip
+        self.assertEqual(code, 0)
+        code, output = self.call("task", "cancel", "--task", "9", "--reason", "Out of scope")
+        self.assertEqual((code, output), (0, "Task 9: Cancelled\n"))
+        self.assertEqual(self.call("task", "start", "--task", "9")[0], 1)
+
     def test_agent_assignment_and_status(self) -> None:
         self.call(
             "task",
