@@ -92,6 +92,10 @@ def _task_parser(resources: argparse._SubParsersAction[argparse.ArgumentParser])
     archive.add_argument("--note", default="")
     consolidate = _task_actor_action(actions, "consolidate")
     consolidate.add_argument("--note", default="")
+    cancel = _task_actor_action(actions, "cancel")
+    cancel.add_argument("--reason", required=True)
+    cancel.add_argument("--cleanup", choices=("ask", "yes", "no"), default="no")
+    cancel.add_argument("--force", action="store_true")
 
 
 def _task_actor_action(

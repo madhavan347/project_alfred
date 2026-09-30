@@ -11,6 +11,7 @@ from alfred.adapters.state import JsonStateStore
 from alfred.application.tasks import TaskService
 from alfred.domain.constants import DispatchMode, LifecyclePhase, RunStatus, TaskStatus
 from alfred.domain.models import AgentRun, Task
+from alfred.domain.state_machine import TransitionError
 from alfred.utils.time import Clock
 
 
@@ -231,3 +232,29 @@ class TaskServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_cancel_archives_the_task_from_any_active_status(self) -> None:
+        for status in (TaskStatus.PENDING, TaskStatus.BLOCKED, TaskStatus.IN_REVIEW):
+            with self.subTest(status=status):
+                task = self.task()
+                task.status = status
+                self.service.upsert(task)
+                cancelled = self.service.cancel(7, "No longer needed")
+                self.assertEqual(cancelled.status, TaskStatus.CANCELLED)
+                self.assertEqual(cancelled.lifecycle_phase, LifecyclePhase.ARCHIVED)
+                self.assertEqual(self.service.events(7)[-1].event_type, "STATUS_CANCELLED")
+
+    def test_cancel_requires_reason_and_rejects_terminal_tasks(self) -> None:
+        self.service.upsert(self.task())
+        with self.assertRaisesRegex(ValueError, "reason"):
+            self.service.cancel(7, " ")
+        self.service.cancel(7, "Abandoned")
+        with self.assertRaises(TransitionError):
+            self.service.cancel(7, "Again")
+
+    def test_cancel_is_refused_while_a_run_is_active(self) -> None:
+        self.service.upsert(self.task())
+        run = AgentRun("r1", 7, "builder", "local", RunStatus.RUNNING)
+        self.store.save_runs([run.to_dict()])
+        with self.assertRaisesRegex(TransitionError, "active run"):
+            self.service.cancel(7, "Abandoned")

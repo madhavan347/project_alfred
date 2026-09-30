@@ -187,16 +187,7 @@ class RunService:
         task = self.tasks.require(task_number)
         run = self._latest_active(task_number)
         if cleanup and not force:
-            dirty = [
-                status.repository
-                for status in self.worktrees.statuses(task_number)
-                if status.changes.strip()
-            ]
-            if dirty:
-                raise ValueError(
-                    f"Task {task_number} worktrees have uncommitted changes: "
-                    f"{', '.join(dirty)}; commit them or pass --force to discard them"
-                )
+            self._require_clean_worktrees(task_number)
         if (
             run.session_name
             and run.session_status == "active"
@@ -220,6 +211,39 @@ class RunService:
                 task.planning_state = PlanningState.PENDING
         self.tasks.record(task, "RUN_STOPPED", note, actor=actor)
         return run
+
+    def cancel(
+        self,
+        task_number: int,
+        reason: str,
+        *,
+        actor: str = "manager",
+        cleanup: bool = False,
+        force: bool = False,
+    ) -> Task:
+        """Abandon a task at any stage: stop a live run, optionally clean up, then cancel."""
+        self.tasks.require(task_number)
+        if cleanup and not force:
+            self._require_clean_worktrees(task_number)
+        if self.active(task_number) is not None:
+            self.stop(task_number, f"Task cancelled: {reason}", actor=actor, cleanup=False)
+        if cleanup:
+            self.worktrees.cleanup(task_number, force=force)
+        self._update_queue(task_number, add=False)
+        return self.tasks.cancel(task_number, reason, actor=actor)
+
+    def _require_clean_worktrees(self, task_number: int) -> None:
+        """Refuse to discard worktrees that hold uncommitted changes."""
+        dirty = [
+            status.repository
+            for status in self.worktrees.statuses(task_number)
+            if status.changes.strip()
+        ]
+        if dirty:
+            raise ValueError(
+                f"Task {task_number} worktrees have uncommitted changes: "
+                f"{', '.join(dirty)}; commit them or pass --force to discard them"
+            )
 
     def record_event(
         self,

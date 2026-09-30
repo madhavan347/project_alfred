@@ -50,7 +50,7 @@ def handle_run(args: argparse.Namespace, services: AlfredServices) -> int:
         run = services.runs.stop(
             args.task,
             args.reason,
-            cleanup=_cleanup_requested(args.cleanup),
+            cleanup=cleanup_requested(args.cleanup),
             force=args.force,
         )
         print(f"Stopped run {run.run_id} for task {args.task}")
@@ -159,7 +159,8 @@ def handle_worktree(args: argparse.Namespace, services: AlfredServices) -> int:
     raise ValueError(f"Unsupported worktree action: {args.action}")
 
 
-def _cleanup_requested(value: str) -> bool:
+def cleanup_requested(value: str) -> bool:
+    """Resolve a --cleanup choice, prompting only on an interactive terminal."""
     if value == "yes":
         return True
     if value == "no" or not sys.stdin.isatty():

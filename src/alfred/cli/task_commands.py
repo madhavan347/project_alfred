@@ -3,6 +3,7 @@
 import argparse
 
 from alfred.bootstrap import AlfredServices
+from alfred.cli.run_commands import cleanup_requested
 from alfred.domain.constants import (
     DispatchMode,
     ExecutionMode,
@@ -91,6 +92,14 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             LifecyclePhase.ARCHIVED,
             args.note or "Archived after completion.",
             actor=args.actor,
+        )
+    elif args.action == "cancel":
+        task = services.runs.cancel(
+            args.task,
+            args.reason,
+            actor=args.actor,
+            cleanup=cleanup_requested(args.cleanup),
+            force=args.force,
         )
     elif args.action == "consolidate":
         task = services.tasks.update_phase(
