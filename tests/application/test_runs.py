@@ -37,6 +37,11 @@ class FixedClock(Clock):
         return datetime(2026, 8, 16, 10, 30, tzinfo=ZoneInfo("UTC"))
 
 
+class FailingTracker:
+    def sync(self, task, event):
+        raise OSError("tracker failed")
+
+
 class RecordingSessions:
     def __init__(self, *, available: bool = True) -> None:
         self.is_available = available
@@ -70,6 +75,7 @@ class RecordingWorktrees:
         self.created = 0
         self.cleaned = 0
         self.changes = ""
+        self.renames: list[tuple[str, str]] = []
 
     def create(self, task: Task, repositories=None) -> dict[str, Path]:
         self.created += 1
@@ -84,6 +90,12 @@ class RecordingWorktrees:
                 changes=self.changes,
             ),
         )
+
+    def rename_branch(
+        self, task_number: int, old: str, new: str, *, force: bool = False
+    ) -> tuple[Path, ...]:
+        self.renames.append((old, new))
+        return (self.root / f"task-{task_number}/app",)
 
     def cleanup(self, task_number: int, *, force: bool = False) -> tuple[Path, ...]:
         self.cleaned += 1
@@ -372,6 +384,32 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(self.tasks.require(7).status, TaskStatus.PENDING)
         task = self.service.cancel(7, "Drop it", cleanup=True, force=True)
         self.assertEqual(task.status, TaskStatus.CANCELLED)
+
+    def test_rename_branch_updates_worktrees_and_task(self) -> None:
+        self.add_task()
+        task = self.service.rename_branch(7, "feature/renamed")
+        self.assertEqual(task.branch_name, "feature/renamed")
+        self.assertEqual(self.worktrees.renames, [("feature/example", "feature/renamed")])
+        self.assertEqual(self.tasks.events(7)[-1].event_type, "BRANCH_RENAMED")
+        self.service.rename_branch(7, "feature/renamed")
+        self.assertEqual(len(self.worktrees.renames), 1)
+        with self.assertRaisesRegex(ValueError, "branch_name"):
+            self.service.rename_branch(7, "bad name")
+
+    def test_rename_branch_is_refused_during_a_run_and_reverts_on_tracker_failure(self) -> None:
+        self.add_task()
+        self.service.trigger((7,))
+        with self.assertRaisesRegex(ValueError, "active run"):
+            self.service.rename_branch(7, "feature/renamed")
+        self.service.stop(7)
+        self.tasks.tracker = FailingTracker()
+        with self.assertRaises(OSError):
+            self.service.rename_branch(7, "feature/renamed")
+        self.assertEqual(
+            self.worktrees.renames,
+            [("feature/example", "feature/renamed"), ("feature/renamed", "feature/example")],
+        )
+        self.assertEqual(self.tasks.require(7).branch_name, "feature/example")
 
     def test_stopped_task_can_be_reopened(self) -> None:
         self.add_task()

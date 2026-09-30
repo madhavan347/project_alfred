@@ -51,6 +51,8 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             if value is not None:
                 setattr(task, field, value)
         if args.branch is not None:
+            # Renames the Git branch in existing worktrees too, then reloads the stored task.
+            services.runs.rename_branch(args.task, args.branch)
             task.branch_name = args.branch.strip()
         if args.type is not None:
             task.task_type = TaskType(args.type)
@@ -96,6 +98,10 @@ def handle_task(args: argparse.Namespace, services: AlfredServices) -> int:
             LifecyclePhase.ARCHIVED,
             args.note or "Archived after completion.",
             actor=args.actor,
+        )
+    elif args.action == "rename-branch":
+        task = services.runs.rename_branch(
+            args.task, args.branch, actor=args.actor, force=args.force
         )
     elif args.action == "cancel":
         task = services.runs.cancel(

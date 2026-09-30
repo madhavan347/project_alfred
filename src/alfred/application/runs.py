@@ -28,6 +28,7 @@ from alfred.domain.state_machine import (
     normalize_completion_status,
     require_transition,
 )
+from alfred.domain.validation import ref_name_problem
 from alfred.ports.session import SessionBackend
 from alfred.utils.time import Clock
 
@@ -44,6 +45,15 @@ class WorktreeOperations(Protocol):
     def statuses(self, task_number: int) -> tuple[WorktreeStatus, ...]: ...
 
     def cleanup(self, task_number: int, *, force: bool = False) -> tuple[Path, ...]: ...
+
+    def rename_branch(
+        self,
+        task_number: int,
+        old_branch: str,
+        new_branch: str,
+        *,
+        force: bool = False,
+    ) -> tuple[Path, ...]: ...
 
 
 class RunService:
@@ -231,6 +241,44 @@ class RunService:
             self.worktrees.cleanup(task_number, force=force)
         self._update_queue(task_number, add=False)
         return self.tasks.cancel(task_number, reason, actor=actor)
+
+    def rename_branch(
+        self,
+        task_number: int,
+        new_branch: str,
+        *,
+        actor: str = "manager",
+        force: bool = False,
+    ) -> Task:
+        """Change a task's branch name, renaming the Git branch in any existing worktrees."""
+        new_branch = new_branch.strip()
+        task = self.tasks.require(task_number)
+        old_branch = task.branch_name
+        if new_branch == old_branch:
+            return task
+        if problem := ref_name_problem(new_branch):
+            raise ValueError(f"branch_name {problem}: {new_branch!r}")
+        if self.active(task_number) is not None:
+            raise ValueError(
+                f"Task {task_number} has an active run; stop it before renaming the branch"
+            )
+        renamed = (
+            self.worktrees.rename_branch(task_number, old_branch, new_branch, force=force)
+            if old_branch
+            else ()
+        )
+        task.branch_name = new_branch
+        try:
+            return self.tasks.record(
+                task,
+                "BRANCH_RENAMED",
+                f"Branch renamed from {old_branch or '-'} to {new_branch}.",
+                actor=actor,
+            )
+        except Exception:
+            if renamed:
+                self.worktrees.rename_branch(task_number, new_branch, old_branch, force=True)
+            raise
 
     def _require_clean_worktrees(self, task_number: int) -> None:
         """Refuse to discard worktrees that hold uncommitted changes."""
