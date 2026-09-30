@@ -43,6 +43,7 @@ class TaskServiceTests(unittest.TestCase):
             FixedClock(ZoneInfo("UTC")),
             agent_aliases=("builder", "reviewer"),
             repository_names=("api", "web"),
+            agent_models={"builder": ("fast", "big")},
         )
 
     def tearDown(self) -> None:
@@ -276,3 +277,17 @@ if __name__ == "__main__":
         legacy[0].pop("task_type")
         self.store.save_tasks(legacy)
         self.assertEqual(self.service.require(8).task_type, TaskType.DEVELOPMENT)
+
+    def test_model_must_be_one_of_the_assigned_agents_models(self) -> None:
+        task = self.task()
+        task.assigned_agent_alias = "builder"
+        task.model = "huge"
+        with self.assertRaisesRegex(ValueError, "configured models: fast, big"):
+            self.service.upsert(task)
+        task.model = "big"
+        self.service.upsert(task)
+        with self.assertRaisesRegex(ValueError, "not available"):
+            self.service.assign(7, "builder", model="tiny")
+        self.assertEqual(self.service.assign(7, "builder", model="fast").model, "fast")
+        # An agent without a configured list accepts any model.
+        self.assertEqual(self.service.assign(7, "reviewer", model="anything").model, "anything")

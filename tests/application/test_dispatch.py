@@ -161,11 +161,27 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertEqual(sessions.created, [])
         self.assertEqual(len(sessions.prompts), 1)
 
-    def _with_execution(self, *execution: str) -> AlfredConfig:
+    def test_model_placeholder_prefers_the_task_model_then_the_agent_default(self) -> None:
+        config = self._with_execution("agent-cli", "--model", "{model}", default_model="base")
+        sessions = RecordingSessions()
+        AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-2:], ("--model", "base"))
+        self.task.model = "big"
+        sessions = RecordingSessions()
+        AgentDispatcher(config, sessions).dispatch(self.task, PromptPhase.EXECUTION, {})
+        self.assertEqual(sessions.created[0][2][-2:], ("--model", "big"))
+
+    def test_model_placeholder_without_any_model_fails_preflight(self) -> None:
+        config = self._with_execution("agent-cli", "--model", "{model}")
+        with self.assertRaisesRegex(ValueError, "no model"):
+            AgentDispatcher(config, RecordingSessions()).preflight(self.task, PromptPhase.EXECUTION)
+
+    def _with_execution(self, *execution: str, default_model: str = "") -> AlfredConfig:
         agent = self.config.agents["builder"]
         replaced = AgentConfig(
             alias=agent.alias,
             runtime_target=agent.runtime_target,
+            default_model=default_model,
             commands=CommandConfig(
                 direct=agent.commands.direct,
                 plan=agent.commands.plan,

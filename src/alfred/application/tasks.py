@@ -1,6 +1,6 @@
 """Task and agent-assignment application workflows."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 
 from alfred.adapters.state import JsonStateStore
 from alfred.domain.constants import (
@@ -39,12 +39,14 @@ class TaskService:
         *,
         agent_aliases: Iterable[str] = (),
         repository_names: Iterable[str] = (),
+        agent_models: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         self.store = store
         self.tracker = tracker
         self.clock = clock
         self.agent_aliases = frozenset(agent_aliases)
         self.repository_names = frozenset(repository_names)
+        self.agent_models = {alias: tuple(models) for alias, models in (agent_models or {}).items()}
 
     def list(self) -> tuple[Task, ...]:
         """Return tasks ordered by task number."""
@@ -71,6 +73,7 @@ class TaskService:
         existing = self.get(task.task_number)
         self._require_configured(task, existing)
         self._require_safe_branch(task, existing)
+        self._require_model_allowed(task)
         if task.execution_mode == ExecutionMode.PLAN_EXECUTION:
             if task.planning_state == PlanningState.NOT_REQUIRED:
                 task.planning_state = PlanningState.PENDING
@@ -96,6 +99,15 @@ class TaskService:
             return
         if problem := ref_name_problem(branch):
             raise ValueError(f"branch_name {problem}: {branch!r}")
+
+    def _require_model_allowed(self, task: Task) -> None:
+        """Reject a model outside the assigned agent's configured list, when it has one."""
+        allowed = self.agent_models.get(task.assigned_agent_alias, ())
+        if task.model and allowed and task.model not in allowed:
+            raise ValueError(
+                f"Model {task.model!r} is not available for agent "
+                f"{task.assigned_agent_alias!r}; configured models: {', '.join(allowed)}"
+            )
 
     def _require_configured(self, task: Task, existing: Task | None) -> None:
         """Reject newly supplied agent aliases or repositories that are not configured."""
@@ -128,14 +140,18 @@ class TaskService:
         *,
         actor: str = "manager",
         dispatch_mode: DispatchMode | None = None,
+        model: str | None = None,
     ) -> Task:
-        """Assign a configured agent and optionally change dispatch behavior."""
+        """Assign a configured agent and optionally change dispatch behavior or model."""
         if self.agent_aliases and agent_alias not in self.agent_aliases:
             available = ", ".join(sorted(self.agent_aliases))
             raise ValueError(f"Unknown agent {agent_alias!r}; configured agents: {available}")
         task = self.require(task_number)
         old = task.assigned_agent_alias or "unassigned"
         task.assigned_agent_alias = agent_alias
+        if model is not None:
+            task.model = model.strip()
+        self._require_model_allowed(task)
         if dispatch_mode is not None:
             task.dispatch_mode = dispatch_mode
         if task.dispatch_mode == DispatchMode.QUEUED and task.status == TaskStatus.PENDING:

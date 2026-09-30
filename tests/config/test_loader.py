@@ -88,6 +88,27 @@ class ConfigLoaderTests(unittest.TestCase):
         with patch.dict(os.environ, {"ALFRED_CONFIG": "/missing/config.toml"}):
             self.assertEqual(discover_config(explicit=self.config_path), self.config_path.resolve())
 
+    def test_agent_models_and_default_are_loaded_and_validated(self) -> None:
+        text = self.config_path.read_text(encoding="utf-8")
+        with_models = text.replace(
+            'runtime_target = "local-cli"',
+            'runtime_target = "local-cli"\nmodels = ["fast", "big"]\ndefault_model = "fast"',
+        )
+        self.config_path.write_text(with_models, encoding="utf-8")
+        agent = load_config(self.config_path).agents["builder"]
+        self.assertEqual((agent.models, agent.default_model), (("fast", "big"), "fast"))
+        self.config_path.write_text(
+            with_models.replace('"fast"\n', '"huge"\n', 1), encoding="utf-8"
+        )
+        with self.assertRaisesRegex(ValueError, "default_model"):
+            load_config(self.config_path)
+        self.config_path.write_text(
+            text.replace('runtime_target = "local-cli"', 'runtime_target = "x"\nmodels = "big"'),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ConfigError, "array of model names"):
+            load_config(self.config_path)
+
     def test_unknown_keys_are_rejected(self) -> None:
         self.config_path.write_text("version = 1\nunexpected = true\n", encoding="utf-8")
         with self.assertRaisesRegex(ConfigError, "Unknown keys"):

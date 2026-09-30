@@ -199,6 +199,12 @@ def _template(agent: AgentConfig, phase: PromptPhase) -> tuple[str, ...]:
     return agent.commands.plan if phase == PromptPhase.PLAN else agent.commands.execution
 
 
+def _uses_placeholder(template: Sequence[str], name: str) -> bool:
+    return any(
+        field == name for argument in template for _, field, _, _ in Formatter().parse(argument)
+    )
+
+
 def _delivers_prompt(template: Sequence[str]) -> bool:
     """Return whether a command template passes the prompt to the agent at startup."""
     return any(
@@ -245,9 +251,16 @@ def _render_command(
         "workdir": str(workdir),
         "prompt": prompt,
         "prompt_file": str(prompt_file),
+        "model": task.model or agent.default_model,
     }
+    template = _template(agent, phase)
+    if not values["model"] and _uses_placeholder(template, "model"):
+        raise ValueError(
+            f"Agent {agent.alias!r} command uses {{model}} but task {task.task_number} has no "
+            "model and the agent has no default_model"
+        )
     try:
-        return tuple(argument.format_map(values) for argument in _template(agent, phase))
+        return tuple(argument.format_map(values) for argument in template)
     except KeyError as exc:
         raise ValueError(
             f"Agent {agent.alias!r} command uses unknown placeholder: {exc.args[0]}"

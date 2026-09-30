@@ -256,6 +256,7 @@ class RunService:
         actor: str = "manager",
         stop_run: bool = False,
         dispatch_mode: DispatchMode | None = None,
+        model: str | None = None,
     ) -> Task:
         """Assign another agent and leave it a handoff from the previous agent's session."""
         previous = self.tasks.require(task_number)
@@ -265,7 +266,9 @@ class RunService:
         )
         if run is not None and stop_run:
             self.stop(task_number, "Agent reassigned.", actor=actor)
-        task = self.tasks.assign(task_number, agent_alias, actor=actor, dispatch_mode=dispatch_mode)
+        task = self.tasks.assign(
+            task_number, agent_alias, actor=actor, dispatch_mode=dispatch_mode, model=model
+        )
         self.handoffs.write(
             task_number,
             self._handoff_text(previous, task_number, transcript_path, transcript),
