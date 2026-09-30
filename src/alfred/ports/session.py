@@ -23,6 +23,10 @@ class SessionBackend(Protocol):
         """Paste a prompt file and submit it to a session."""
         ...
 
+    def capture(self, name: str) -> str:
+        """Return the session's visible and scrollback output."""
+        ...
+
     def stop(self, name: str) -> None:
         """Stop a named session."""
         ...

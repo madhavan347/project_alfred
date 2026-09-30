@@ -75,6 +75,12 @@ class TmuxSessionBackend:
         self.runner.run(("tmux", "paste-buffer", "-p", "-d", "-b", buffer, "-t", name))
         self.runner.run(("tmux", "send-keys", "-t", name, "Enter"))
 
+    def capture(self, name: str) -> str:
+        """Return a validated session's full scrollback as plain text."""
+        self._require_available()
+        _validate_name(name)
+        return self.runner.run(("tmux", "capture-pane", "-p", "-S", "-", "-t", name)).stdout
+
     def stop(self, name: str) -> None:
         """Stop a validated named session."""
         self._require_available()

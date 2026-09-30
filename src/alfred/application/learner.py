@@ -76,7 +76,11 @@ class LearnerService:
                 "Only add new entries. Never edit, merge, move, or delete existing entries:",
                 "Alfred counts them per task for completion validation.",
                 "",
+                "Session transcripts (per task, captured when a run stops or completes) show",
+                "what the agent tried and hit; use them for issues and decisions the report omits.",
+                "",
                 f"Processed completions: {processed}",
+                f"Session transcripts: {self.config.runtime.temp_directory / 'transcripts'}",
                 f"Knowledge directory: {self.config.knowledge.directory}",
                 "",
             ]
