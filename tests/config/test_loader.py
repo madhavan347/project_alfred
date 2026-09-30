@@ -109,6 +109,17 @@ class ConfigLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "array of model names"):
             load_config(self.config_path)
 
+    def test_skills_directory_defaults_and_resolves(self) -> None:
+        default = load_config(self.config_path).skills.directory
+        self.assertEqual(default, (self.root / ".alfred/skills").resolve())
+        text = (
+            self.config_path.read_text(encoding="utf-8") + '\n[skills]\ndirectory = "my-skills"\n'
+        )
+        self.config_path.write_text(text, encoding="utf-8")
+        self.assertEqual(
+            load_config(self.config_path).skills.directory, (self.root / "my-skills").resolve()
+        )
+
     def test_unknown_keys_are_rejected(self) -> None:
         self.config_path.write_text("version = 1\nunexpected = true\n", encoding="utf-8")
         with self.assertRaisesRegex(ConfigError, "Unknown keys"):

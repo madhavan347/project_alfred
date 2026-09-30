@@ -96,6 +96,22 @@ class AgentDispatchTests(unittest.TestCase):
         self.assertIn("Type: research", prompt)
         self.assertIn("without creating a branch or commits", prompt)
 
+    def test_skill_and_handoff_sections_are_added_only_when_present(self) -> None:
+        builder = PromptBuilder(self.config)
+        plain = builder.build(self.task, PromptPhase.PLAN, {})
+        self.assertNotIn("## Skill", plain)
+        self.assertNotIn("## Handoff", plain)
+        prompt = builder.build(self.task, PromptPhase.PLAN, {}, "Left off at step 2", "List risks.")
+        self.assertIn("## Skill: plan\n\nList risks.", prompt)
+        self.assertIn("## Handoff from previous agent\n\nLeft off at step 2", prompt)
+
+    def test_dispatcher_reads_the_configured_skill_file(self) -> None:
+        AgentDispatcher(self.config, RecordingSessions()).skills.set("execution", "Run the tests.")
+        outcome = AgentDispatcher(self.config, RecordingSessions()).dispatch(
+            self.task, PromptPhase.EXECUTION, {}
+        )
+        self.assertIn("## Skill: execution\n\nRun the tests.", outcome.prompt_file.read_text())
+
     def test_direct_prompt_does_not_reference_an_approved_plan(self) -> None:
         prompt = PromptBuilder(self.config).build(self.task, PromptPhase.EXECUTION, {})
         self.assertIn("Implement the task, validate it", prompt)

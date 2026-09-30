@@ -11,6 +11,7 @@ from alfred.cli.support_commands import (
     handle_migration,
     handle_notifications,
     handle_report,
+    handle_skill,
     handle_sync,
 )
 from alfred.cli.task_commands import handle_agent, handle_task
@@ -35,6 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "worktree": handle_worktree,
         "sync": handle_sync,
         "knowledge": handle_knowledge,
+        "skill": handle_skill,
         "report": handle_report,
         "notifications": handle_notifications,
         "coordinator": handle_coordinator,

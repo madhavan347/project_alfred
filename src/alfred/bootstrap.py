@@ -16,6 +16,7 @@ from alfred.application.knowledge import KnowledgeService
 from alfred.application.learner import LearnerService
 from alfred.application.notifications import NotificationService
 from alfred.application.runs import RunService
+from alfred.application.skills import SkillService
 from alfred.application.sync import SyncService
 from alfred.application.tasks import TaskService
 from alfred.config.loader import discover_config, load_config
@@ -39,6 +40,7 @@ class AlfredServices:
     coordinator: Coordinator
     learner: LearnerService
     sessions: TmuxSessionBackend
+    skills: SkillService
 
 
 def build_services(
@@ -99,4 +101,5 @@ def build_services(
         coordinator=Coordinator(config, store, completions, notifications, sessions),
         learner=LearnerService(config, sessions),
         sessions=sessions,
+        skills=dispatcher.skills,
     )

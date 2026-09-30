@@ -87,6 +87,14 @@ Agent CLIs may stop at a folder-trust or permission-mode dialog in a detached se
 read the prompt. Answer each dialog once by attaching with `alfred run attach` (or `learner
 attach`); the prompt passed as an argument is submitted after the dialog closes.
 
+### `skills`
+
+`[skills] directory` (default `.alfred/skills`) holds two optional Markdown files, `plan.md` and
+`execution.md`. When a file exists its text is appended to that phase's prompt under a
+"Skill" heading; without it the built-in instructions apply unchanged. Manage them with
+`alfred skill list`, `show --phase plan`, `set --phase plan --file path` (or `--content TEXT`),
+and `remove --phase plan`. Files are limited to 64 KiB.
+
 ### `trackers.markdown`
 
 The built-in tracker is disabled by default. When enabled, `canonical`, `agents`, and `daily_notes`
