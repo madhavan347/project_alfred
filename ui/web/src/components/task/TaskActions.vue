@@ -89,6 +89,7 @@ const groups = computed(() => [
       ['block', 'block', 'Block'],
       ['unblock', 'unblock', props.task.status === 'On Hold' ? 'Resume' : 'Unblock'],
       ['hold', 'hold', 'Put on hold'],
+      ['cancel', 'cancel', 'Cancel task'],
     ],
   },
   {

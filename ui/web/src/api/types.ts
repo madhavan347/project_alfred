@@ -10,7 +10,9 @@ export type TaskStatus =
   | 'MR in Review'
   | 'Completed'
   | 'Consolidated'
+  | 'Cancelled'
 
+export type TaskType = 'development' | 'research' | 'analysis'
 export type LifecyclePhase = 'active' | 'testing_deployment' | 'archived' | 'consolidated'
 export type PlanningState = 'not_required' | 'pending' | 'started' | 'approved' | 'completed'
 export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'blocked' | 'stopped'
@@ -39,6 +41,7 @@ export type ActionName =
   | 'merge'
   | 'deploy'
   | 'archive'
+  | 'cancel'
   | 'consolidate'
   | 'assign'
   | 'reassign'
@@ -146,6 +149,8 @@ export interface Task {
   title: string
   description: string
   category: string
+  task_type: TaskType
+  model: string
   priority: string
   status: TaskStatus
   deadline: string
@@ -227,6 +232,8 @@ export interface AgentDescription {
   executable: string
   cli: string
   model: string
+  models: string[]
+  default_model: string
   prompt_delivery: Record<'direct' | 'plan' | 'execution', 'argument' | 'paste'>
   placeholders: Record<string, string[]>
   unknown_placeholders: Record<string, string[]>
@@ -469,6 +476,38 @@ export interface ConfigPayload {
       commands: { direct: string[]; plan: string[]; execution: string[] }
     }
   >
+}
+
+export interface SkillEntry {
+  phase: 'plan' | 'execution'
+  path: string
+  exists: boolean
+  content: string
+}
+
+export interface SkillListing {
+  directory: string
+  max_bytes: number
+  skills: SkillEntry[]
+}
+
+export interface ServerStatus {
+  versions: { alfred: string; ui: string }
+  checkout: string
+  packages: { alfred: string; alfred_ui: string }
+  git: { available: boolean; branch?: string; commit?: string; subject?: string; changes?: number }
+  started_at: string
+  frontend: { static_directory: string; built_at: string; sources_changed_at: string; stale: boolean }
+  backend: { changed_at: string; stale: boolean }
+  rebuild: { available: boolean; reason: string }
+  restart: { available: boolean; reason: string }
+}
+
+export interface RebuildResult {
+  ok: boolean
+  message: string
+  output: string
+  seconds: number
 }
 
 export interface ActionResult {

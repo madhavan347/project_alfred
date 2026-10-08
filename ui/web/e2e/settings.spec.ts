@@ -1,6 +1,7 @@
 /**
- * Settings: health checks, editing the configuration with Alfred's own validation, creating and
- * switching workspaces, migrating legacy runtime state, and the recorded actor.
+ * Settings: health checks, editing the configuration with Alfred's own validation, plan and
+ * execution skills, creating and switching workspaces, migrating legacy runtime state, and the
+ * recorded actor.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -53,6 +54,38 @@ test('the configuration editor validates with Alfred and saves a new agent', asy
   expect(alfred(['agent', 'assign', '--task', '61', '--to', 'watcher']).output).toContain('assigned to watcher')
   await page.locator('.topbar').getByRole('button', { name: 'New task' }).click()
   await expect(page.locator('#task-agent option[value="watcher"]')).toHaveCount(1)
+})
+
+test('the plan skill is saved where alfred skill reads it, then removed', async ({ page }) => {
+  await signIn(page)
+  await page.goto(`${env.base}/settings#skills`)
+  const plan = page.locator('[data-skill="plan"]')
+  await expect(plan).toContainText('Built-in only')
+  await plan.getByLabel('Plan skill').fill('List the risks before the steps.')
+  await plan.getByTestId('save-skill-plan').click()
+  await expect(plan).toContainText('Defined')
+  expect(alfred(['skill', 'show', '--phase', 'plan']).output).toContain('List the risks before the steps.')
+
+  await plan.getByRole('button', { name: 'Remove' }).click()
+  await expect(plan).toContainText('Built-in only')
+  expect(alfred(['skill', 'show', '--phase', 'plan']).output).toContain('No skill defined')
+})
+
+test('the server restarts itself from Settings and the page reconnects', async ({ page }) => {
+  await signIn(page)
+  await page.goto(`${env.base}/settings#server`)
+  await expect(page.getByText('Running server')).toBeVisible()
+  const before = await api<{ started_at: string; checkout: string; restart: { available: boolean } }>('GET', '/server')
+  expect(before.restart.available).toBe(true)
+  await expect(page.locator('main')).toContainText(before.checkout)
+
+  await page.getByRole('button', { name: 'Restart only' }).click()
+  await expect.poll(async () => (await api<{ started_at: string }>('GET', '/server').catch(() => before)).started_at, { timeout: 30_000 }).not.toBe(
+    before.started_at,
+  )
+  // The page reloads by itself once the new server answers, still signed in with the same token.
+  await expect(page.locator('.topbar')).toContainText('Live', { timeout: 30_000 })
+  await expect(page.getByText('Running server')).toBeVisible()
 })
 
 test('a new workspace is created, legacy state is migrated into it, and the sandbox is reopened', async ({ page }) => {

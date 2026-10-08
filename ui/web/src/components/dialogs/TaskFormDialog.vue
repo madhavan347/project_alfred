@@ -3,9 +3,9 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { TriangleAlert } from 'lucide-vue-next'
 import { api } from '@/api/http'
-import type { ActionResult, Task } from '@/api/types'
+import type { ActionResult, Task, TaskType } from '@/api/types'
 import { alfredCommand, csv } from '@/lib/cli'
-import { PRIORITIES } from '@/lib/status'
+import { PRIORITIES, TASK_TYPE_META, TASK_TYPES } from '@/lib/status'
 import { useRequest } from '@/composables/useRequest'
 import { useDialogs } from '@/stores/dialogs'
 import { useLive } from '@/stores/live'
@@ -25,6 +25,8 @@ interface Form {
   title: string
   description: string
   category: string
+  type: TaskType
+  model: string
   priority: string
   deadline: string
   notes: string
@@ -59,6 +61,8 @@ function blank(): Form {
     title: '',
     description: '',
     category: 'General',
+    type: 'development',
+    model: '',
     priority: 'P2',
     deadline: '',
     notes: '',
@@ -87,6 +91,8 @@ watch(
         title: task.title,
         description: task.description,
         category: task.category,
+        type: task.task_type,
+        model: task.model,
         priority: task.priority,
         deadline: task.deadline,
         notes: task.notes,
@@ -121,10 +127,31 @@ function slug(text: string): string {
 watch(
   () => [form.title, form.task],
   () => {
-    if (editing.value || branchTouched.value || form.worktree === 'disabled') return
+    if (editing.value || branchTouched.value || form.worktree === 'disabled' || !developing.value) return
     form.branch = form.title.trim() ? `feature/${slug(form.title)}-${form.task}` : ''
   },
 )
+
+// Research and analysis produce findings, not commits: Alfred runs them without a branch or worktrees.
+const developing = computed(() => form.type === 'development')
+watch(
+  () => form.type,
+  (type) => {
+    if (type === 'development') return
+    form.worktree = 'disabled'
+    if (!editing.value && !branchTouched.value) form.branch = ''
+  },
+)
+
+const modelAgent = computed(() =>
+  live.config?.agents.find((agent) => agent.alias === (editing.value ? original.value?.assigned_agent_alias : form.assign)),
+)
+const modelOptions = computed(() => [
+  { value: '', label: `Agent default${modelAgent.value?.default_model ? ` (${modelAgent.value.default_model})` : ''}` },
+  ...(modelAgent.value?.models ?? []).map((model) => ({ value: model, label: model })),
+  ...(form.model && !(modelAgent.value?.models ?? []).includes(form.model) ? [{ value: form.model, label: `${form.model} (not listed)` }] : []),
+])
+const branchRenamed = computed(() => editing.value && !!original.value?.branch_name && form.branch.trim() !== original.value.branch_name)
 
 const agentOptions = computed(() => [
   { value: '', label: 'Unassigned' },
@@ -168,6 +195,8 @@ const changes = computed(() => {
     ['title', 'title', task.title],
     ['description', 'description', task.description],
     ['category', 'category', task.category],
+    ['type', 'type', task.task_type],
+    ['model', 'model', task.model],
     ['priority', 'priority', task.priority],
     ['deadline', 'deadline', task.deadline],
     ['notes', 'notes', task.notes],
@@ -189,7 +218,7 @@ const command = computed(() => {
       'task',
       'update',
       ['--task', form.task],
-      ...(['title', 'description', 'category', 'priority', 'deadline', 'notes', 'branch', 'mode', 'worktree'] as const).map(
+      ...(['title', 'description', 'category', 'type', 'model', 'priority', 'deadline', 'notes', 'branch', 'mode', 'worktree'] as const).map(
         (key) => (key in diff ? ([`--${key}`, String(diff[key]), true] as const) : false),
       ),
       'repos' in diff ? (['--repos', csv(form.repos), true] as const) : false,
@@ -203,6 +232,8 @@ const command = computed(() => {
     ['--title', form.title || '<title>'],
     ['--description', form.description || '<description>'],
     ['--category', form.category === 'General' ? '' : form.category],
+    ['--type', form.type === 'development' ? '' : form.type],
+    ['--model', form.model],
     ['--priority', form.priority === 'P2' ? '' : form.priority],
     ['--deadline', form.deadline],
     ['--notes', form.notes],
@@ -241,6 +272,8 @@ async function submit() {
           title: form.title,
           description: form.description,
           category: form.category.trim() || 'General',
+          type: form.type,
+          model: form.model,
           priority: form.priority,
           deadline: form.deadline,
           notes: form.notes,
@@ -282,6 +315,17 @@ async function submit() {
       <FormField label="Description" required for-id="task-description" class="full" help="Agents receive this in their prompt. Markdown is fine.">
         <TextArea id="task-description" v-model="form.description" :rows="4" :invalid="attempted && !form.description.trim()" />
       </FormField>
+      <FormField label="Type" class="half" :help="TASK_TYPE_META[form.type].description">
+        <SegmentedControl
+          v-model="form.type"
+          :options="TASK_TYPES.map((value) => ({ value, label: TASK_TYPE_META[value].label, hint: TASK_TYPE_META[value].description }))"
+          label="Task type"
+        />
+      </FormField>
+      <FormField label="Model" for-id="task-model" class="half" help="Fills the {model} placeholder in the agent’s commands.">
+        <SelectInput v-if="modelAgent?.models.length" id="task-model" v-model="form.model" :options="modelOptions" />
+        <TextInput v-else id="task-model" v-model="form.model" mono :placeholder="modelAgent?.default_model || 'Agent default'" />
+      </FormField>
       <FormField label="Priority" class="half">
         <SegmentedControl v-model="form.priority" :options="PRIORITIES.map((value) => ({ value, label: value }))" label="Priority" />
       </FormField>
@@ -314,7 +358,7 @@ async function submit() {
           label="Execution mode"
         />
       </FormField>
-      <FormField label="Worktrees" class="half">
+      <FormField v-if="developing" label="Worktrees" class="half">
         <SegmentedControl
           v-model="form.worktree"
           :options="[
@@ -324,7 +368,19 @@ async function submit() {
           label="Worktree mode"
         />
       </FormField>
-      <FormField label="Branch" for-id="task-branch" class="full" :help="form.worktree === 'enabled' ? 'Created from each repository’s default branch, or reused if it exists and has not diverged.' : 'Optional without worktrees.'">
+      <FormField
+        v-if="developing || form.branch"
+        label="Branch"
+        for-id="task-branch"
+        class="full"
+        :help="
+          editing
+            ? 'Renaming also renames the branch in the task’s existing worktrees. Stop an active run first.'
+            : form.worktree === 'enabled'
+              ? 'Created from each repository’s default branch, or reused if it exists and has not diverged.'
+              : 'Optional without worktrees.'
+        "
+      >
         <TextInput
           id="task-branch"
           v-model="form.branch"
@@ -346,6 +402,12 @@ async function submit() {
     </form>
     <p v-if="modeChanged" class="warning">
       <TriangleAlert :size="15" aria-hidden="true" /> Changing the execution mode resets the planning state.
+    </p>
+    <p v-if="!developing" class="warning">
+      <TriangleAlert :size="15" aria-hidden="true" /> {{ TASK_TYPE_META[form.type].label }} tasks run in the workspace root without a branch, worktrees, or commits.
+    </p>
+    <p v-if="branchRenamed" class="warning">
+      <TriangleAlert :size="15" aria-hidden="true" /> Saving renames {{ original?.branch_name }} to {{ form.branch.trim() || '(none)' }} in existing worktrees.
     </p>
     <CommandLine :command="command" />
     <ul v-if="attempted && problems.length" class="problems" role="alert">

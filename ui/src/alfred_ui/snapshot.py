@@ -611,6 +611,11 @@ def available_actions(
         if phase != LifecyclePhase.ACTIVE
         else "",
     )
+    # Cancel stops a live run itself, so only the status and lifecycle limit it.
+    decide(
+        "cancel",
+        "The task is finished" if terminal else _transition_reason(status, TaskStatus.CANCELLED),
+    )
     decide("assign", "The task is finished" if terminal else "")
     decide(
         "reassign",

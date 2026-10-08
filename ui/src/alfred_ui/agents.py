@@ -23,7 +23,7 @@ KNOWN_CLIS = {
 }
 PROMPT_PLACEHOLDERS = frozenset({"prompt", "prompt_file"})
 TASK_PLACEHOLDERS = frozenset(
-    {"task_number", "task_title", "task_branch", "phase", "workdir", *PROMPT_PLACEHOLDERS}
+    {"task_number", "task_title", "task_branch", "phase", "workdir", "model", *PROMPT_PLACEHOLDERS}
 )
 
 
@@ -42,7 +42,9 @@ def describe_agent(agent: AgentConfig) -> dict[str, Any]:
         "commands": commands,
         "executable": executable,
         "cli": cli_label(execution),
-        "model": detect_model(execution) or detect_model(agent.commands.plan),
+        "model": pinned_model(agent) or agent.default_model,
+        "models": list(agent.models),
+        "default_model": agent.default_model,
         "prompt_delivery": {
             phase: "argument" if delivers_prompt(command) else "paste"
             for phase, command in commands.items()
@@ -67,6 +69,12 @@ def cli_label(command: Sequence[str]) -> str:
         script = next((PurePath(item).name for item in command[1:] if item.endswith(".py")), "")
         return f"Python script ({script})" if script else "Python"
     return KNOWN_CLIS.get(executable, executable)
+
+
+def pinned_model(agent: AgentConfig) -> str:
+    """Return a model fixed in the commands; a ``{model}`` placeholder pins nothing."""
+    detected = detect_model(agent.commands.execution) or detect_model(agent.commands.plan)
+    return "" if "{model}" in detected else detected
 
 
 def detect_model(command: Sequence[str]) -> str:

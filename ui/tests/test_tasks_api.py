@@ -166,3 +166,79 @@ def test_reports_and_events(client: TestClient) -> None:
     assert [item["event_type"] for item in listing["events"]] == ["TASK_UPSERTED", "STATUS_BLOCKED"]
     older = client.get("/api/events", params={"before": 1, "limit": 5}).json()
     assert [item["index"] for item in older["events"]] == [0]
+
+
+def test_task_type_and_model_round_trip(client: TestClient, workspace: Path) -> None:
+    create(client, 9, type="research", model="any-model", branch="")
+    record = task(workspace, 9)
+    assert record["task_type"] == "research"
+    assert record["model"] == "any-model"
+    # Research and analysis never need a branch, so Alfred turns worktrees off.
+    assert record["worktree_mode"] == "disabled"
+    derived = client.get("/api/tasks/9").json()["task"]["derived"]
+    assert derived["actions"]["worktree_create"]["reason"] == "Worktrees are disabled for this task"
+
+    updated = client.patch("/api/tasks/9", json={"type": "analysis", "model": " other "})
+    assert updated.status_code == 200
+    record = task(workspace, 9)
+    assert (record["task_type"], record["model"]) == ("analysis", "other")
+    bad_type = client.patch("/api/tasks/9", json={"type": "chore"})
+    assert bad_type.status_code == 400
+
+
+def test_models_follow_the_agent_configuration(client: TestClient, workspace: Path) -> None:
+    text = workspace.read_text(encoding="utf-8").replace(
+        '[agents.recorder]\nruntime_target = "local-test"\n',
+        '[agents.recorder]\nruntime_target = "local-test"\n'
+        'models = ["small", "large"]\ndefault_model = "small"\n',
+    )
+    workspace.write_text(text, encoding="utf-8")
+    agents = {
+        item["alias"]: item for item in client.get("/api/snapshot").json()["config"]["agents"]
+    }
+    assert agents["recorder"]["models"] == ["small", "large"]
+    assert agents["recorder"]["default_model"] == "small"
+    assert agents["recorder"]["model"] == "small"
+
+    create(client, 10, assign="")
+    assigned = client.post("/api/tasks/10/assign", json={"agent": "recorder", "model": "large"})
+    assert assigned.status_code == 200
+    assert task(workspace, 10)["model"] == "large"
+    refused = client.post("/api/tasks/10/reassign", json={"agent": "recorder", "model": "huge"})
+    assert "configured models: small, large" in refused.json()["error"]
+    kept = client.post("/api/tasks/10/reassign", json={"agent": "recorder"})
+    assert kept.status_code == 200
+    assert task(workspace, 10)["model"] == "large"
+
+
+def test_cancel_from_any_stage(client: TestClient, workspace: Path) -> None:
+    create(client, 11)
+    client.post("/api/tasks/11/block", json={"reason": "Stuck"})
+    assert client.get("/api/tasks/11").json()["task"]["derived"]["actions"]["cancel"]["enabled"]
+    blank = client.post("/api/tasks/11/cancel", json={"reason": "  "})
+    assert blank.json()["error"] == "A cancel reason is required"
+    cancelled = client.post("/api/tasks/11/cancel", json={"reason": "No longer needed"})
+    assert cancelled.json()["message"] == "Task 11: Cancelled"
+    record = task(workspace, 11)
+    assert (record["status"], record["lifecycle_phase"]) == ("Cancelled", "archived")
+    derived = client.get("/api/tasks/11").json()["task"]["derived"]
+    assert derived["actions"]["cancel"]["reason"] == "The task is finished"
+    assert derived["actions"]["trigger"]["enabled"] is False
+    again = client.post("/api/tasks/11/cancel", json={"reason": "Twice"})
+    assert again.status_code == 400
+
+
+def test_skills_can_be_listed_saved_and_removed(client: TestClient) -> None:
+    listing = client.get("/api/skills").json()
+    assert [item["phase"] for item in listing["skills"]] == ["plan", "execution"]
+    assert not any(item["exists"] for item in listing["skills"])
+    saved = client.put("/api/skills/plan", json={"content": "  Always list risks.  "})
+    assert saved.json()["message"].startswith("Skill saved: ")
+    plan = client.get("/api/skills").json()["skills"][0]
+    assert (plan["exists"], plan["content"]) == (True, "Always list risks.")
+    empty = client.put("/api/skills/execution", json={"content": " "})
+    assert empty.json()["error"] == "Skill content must not be empty"
+    unknown = client.put("/api/skills/review", json={"content": "x"})
+    assert unknown.status_code == 400
+    assert client.post("/api/skills/plan/remove").json()["removed"] is True
+    assert client.post("/api/skills/plan/remove").json()["message"] == "No skill to remove"

@@ -25,6 +25,7 @@ from alfred_ui.snapshot import build_task_detail, describe_session
 from alfred_ui.terminal import TerminalBridge
 from alfred_ui.tmux_inspector import TmuxInspector, TmuxUnavailableError
 from alfred_ui.transcripts import TranscriptStore
+from alfred_ui.updater import Updater
 from alfred_ui.workspace import NoWorkspaceError, WorkspaceContext
 
 T = TypeVar("T")
@@ -40,9 +41,11 @@ def create_app(
     static_directory: Path | None = DEFAULT_STATIC,
     inspector: TmuxInspector | None = None,
     hub: LiveHub | None = None,
+    updater: Updater | None = None,
 ) -> FastAPI:
     """Create the UI application for one workspace context."""
     tokens = policy or TokenPolicy(token=None)
+    server = updater or Updater(static_directory=static_directory)
     tmux = inspector or TmuxInspector()
     live = hub or LiveHub(context, tmux)
     terminals = TerminalBridge(tmux)
@@ -85,6 +88,20 @@ def create_app(
     @app.get("/api/health")
     def health() -> dict[str, Any]:
         return {"ok": True, "versions": _versions()}
+
+    # Server: offline rebuild and self-restart ------------------------------------------------
+
+    @app.get("/api/server")
+    def server_status() -> dict[str, Any]:
+        return server.describe()
+
+    @app.post("/api/server/rebuild")
+    def rebuild_frontend() -> dict[str, Any]:
+        return server.rebuild()
+
+    @app.post("/api/server/restart")
+    def restart_server() -> dict[str, Any]:
+        return server.request_restart()
 
     @app.get("/api/auth/status")
     def auth_status(request: Request) -> dict[str, Any]:
@@ -370,6 +387,10 @@ def create_app(
     def archive_task(number: int, body: schemas.NoteBody) -> dict[str, Any]:
         return mutate(lambda current: actions.archive_task(current, number, body))
 
+    @app.post("/api/tasks/{number}/cancel")
+    def cancel_task(number: int, body: schemas.CancelBody) -> dict[str, Any]:
+        return mutate(lambda current: actions.cancel_task(current, tmux, number, body))
+
     @app.post("/api/tasks/{number}/consolidate")
     def consolidate_task(number: int, body: schemas.NoteBody) -> dict[str, Any]:
         return mutate(lambda current: actions.consolidate_task(current, number, body))
@@ -435,6 +456,18 @@ def create_app(
     @app.post("/api/knowledge")
     def add_knowledge(body: schemas.KnowledgeBody) -> dict[str, Any]:
         return mutate(lambda current: actions.add_knowledge(current, body))
+
+    @app.get("/api/skills")
+    def skills() -> dict[str, Any]:
+        return actions.list_skills(services())
+
+    @app.put("/api/skills/{phase}")
+    def set_skill(phase: schemas.SkillPhase, body: schemas.SkillBody) -> dict[str, Any]:
+        return mutate(lambda current: actions.set_skill(current, phase, body))
+
+    @app.post("/api/skills/{phase}/remove")
+    def remove_skill(phase: schemas.SkillPhase) -> dict[str, Any]:
+        return mutate(lambda current: actions.remove_skill(current, phase))
 
     @app.post("/api/coordinator/start")
     def coordinator_start() -> dict[str, Any]:

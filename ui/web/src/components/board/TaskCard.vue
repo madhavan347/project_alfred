@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Bell, FileWarning, GitBranch, ScrollText } from 'lucide-vue-next'
 import type { Task } from '@/api/types'
 import { useLive } from '@/stores/live'
-import { statusLamp } from '@/lib/status'
+import { TASK_TYPE_META, statusLamp } from '@/lib/status'
 import { nextStep } from '@/lib/actions'
 import LampDot from '@/components/base/LampDot.vue'
 import TagChip from '@/components/base/TagChip.vue'
@@ -84,6 +84,9 @@ function dragStart(event: DragEvent) {
       <TagChip v-if="task.execution_mode === 'plan-execution'" :tone="task.derived.plan.awaiting_approval && task.derived.plan.reported ? 'brass' : 'default'">
         <ScrollText :size="11" aria-hidden="true" />
         {{ planLabel }}
+      </TagChip>
+      <TagChip v-if="task.task_type !== 'development'" :title="TASK_TYPE_META[task.task_type].description">
+        {{ TASK_TYPE_META[task.task_type].label }}
       </TagChip>
       <TagChip v-if="task.branch_name" mono :title="task.branch_name">
         <GitBranch :size="11" aria-hidden="true" />{{ task.branch_name }}

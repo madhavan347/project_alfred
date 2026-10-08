@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from alfred.application.skills import MAX_SKILL_BYTES
 from alfred.bootstrap import AlfredServices
 from alfred.config.initializer import initialize_workspace
 from alfred.config.migration import migrate_legacy_runtime
@@ -19,8 +20,10 @@ from alfred.domain.constants import (
     ExecutionMode,
     LifecyclePhase,
     PlanningState,
+    PromptPhase,
     RunStatus,
     TaskStatus,
+    TaskType,
     WorktreeMode,
 )
 from alfred.domain.models import Task
@@ -54,6 +57,8 @@ def create_task(services: AlfredServices, body: schemas.TaskCreateBody) -> Resul
         title=body.title,
         description=body.description,
         category=body.category,
+        task_type=TaskType(body.type),
+        model=body.model.strip(),
         priority=body.priority,
         deadline=body.deadline,
         notes=body.notes,
@@ -75,14 +80,23 @@ def create_task(services: AlfredServices, body: schemas.TaskCreateBody) -> Resul
 
 
 def update_task(services: AlfredServices, number: int, body: schemas.TaskUpdateBody) -> Result:
-    """``alfred task update``: change only the supplied fields."""
-    task = services.tasks.require(number)
+    """``alfred task update``: change only the supplied fields.
+
+    A branch change goes through ``rename_branch`` first, so existing worktrees are renamed too.
+    """
+    task = (
+        services.runs.rename_branch(number, body.branch, actor=body.actor)
+        if body.branch is not None
+        else services.tasks.require(number)
+    )
     for field in ("title", "description", "category", "priority", "deadline", "notes"):
         value = getattr(body, field)
         if value is not None:
             setattr(task, field, value)
-    if body.branch is not None:
-        task.branch_name = body.branch.strip()
+    if body.model is not None:
+        task.model = body.model.strip()
+    if body.type is not None:
+        task.task_type = TaskType(body.type)
     if body.mode is not None:
         task.execution_mode = ExecutionMode(body.mode)
         task.planning_state = (
@@ -166,6 +180,33 @@ def consolidate_task(services: AlfredServices, number: int, body: schemas.NoteBo
     return _status(task)
 
 
+def cancel_task(
+    services: AlfredServices,
+    inspector: TmuxInspector,
+    number: int,
+    body: schemas.CancelBody,
+) -> Result:
+    """``alfred task cancel``: abandon the task at any stage; the UI saves a live transcript."""
+    if not body.reason.strip():
+        raise ValueError("A cancel reason is required")
+    active = services.runs.active(number)
+    transcript = None
+    if active is not None and active.session_name:
+        transcript = _safe_capture(services, inspector, active.session_name, number, "cancelled")
+    task = services.runs.cancel(
+        number,
+        body.reason.strip(),
+        actor=body.actor,
+        cleanup=body.cleanup,
+        force=body.cleanup and body.force,
+    )
+    return _result(
+        f"Task {task.task_number}: {task.status}",
+        task_number=task.task_number,
+        transcript=transcript,
+    )
+
+
 def _status(task: Task) -> Result:
     return _result(f"Task {task.task_number}: {task.status}", task_number=task.task_number)
 
@@ -176,7 +217,9 @@ def _status(task: Task) -> Result:
 def assign_agent(services: AlfredServices, number: int, body: schemas.AssignBody) -> Result:
     """``alfred agent assign``."""
     dispatch = DispatchMode(body.dispatch) if body.dispatch else None
-    task = services.tasks.assign(number, body.agent, actor=body.actor, dispatch_mode=dispatch)
+    task = services.tasks.assign(
+        number, body.agent, actor=body.actor, dispatch_mode=dispatch, model=body.model
+    )
     return _result(
         f"Task {task.task_number} assigned to {task.assigned_agent_alias}",
         task_number=task.task_number,
@@ -187,7 +230,9 @@ def reassign_agent(services: AlfredServices, number: int, body: schemas.Reassign
     """``alfred agent reassign``, stopping the active run first for stop-and-switch."""
     stop_run = body.mode == "stop-and-switch"
     stopped = stop_run and services.runs.active(number) is not None
-    task = services.runs.reassign(number, body.agent, actor=body.actor, stop_run=stop_run)
+    task = services.runs.reassign(
+        number, body.agent, actor=body.actor, stop_run=stop_run, model=body.model
+    )
     message = f"Task {task.task_number} assigned to {task.assigned_agent_alias}"
     if stopped:
         message = f"Stopped the active run. {message}"
@@ -458,6 +503,36 @@ def learner_stop(services: AlfredServices) -> Result:
     """``alfred learner stop``."""
     stopped = services.learner.stop()
     return _result("Learner stopped" if stopped else "Learner is not running")
+
+
+def list_skills(services: AlfredServices) -> dict[str, Any]:
+    """``alfred skill list`` plus each phase's text, for the skill editor."""
+    skills = services.skills
+    return {
+        "directory": str(skills.directory),
+        "max_bytes": MAX_SKILL_BYTES,
+        "skills": [
+            {
+                "phase": phase.value,
+                "path": str(skills.path(phase)),
+                "exists": skills.path(phase).is_file(),
+                "content": skills.get(phase),
+            }
+            for phase in PromptPhase
+        ],
+    }
+
+
+def set_skill(services: AlfredServices, phase: str, body: schemas.SkillBody) -> Result:
+    """``alfred skill set``: create or replace one phase's skill."""
+    path = services.skills.set(phase, body.content)
+    return _result(f"Skill saved: {path}", path=str(path))
+
+
+def remove_skill(services: AlfredServices, phase: str) -> Result:
+    """``alfred skill remove``: fall back to the built-in instructions."""
+    removed = services.skills.remove(phase)
+    return _result("Skill removed" if removed else "No skill to remove", removed=removed)
 
 
 def acknowledge_notifications(

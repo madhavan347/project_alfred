@@ -1,6 +1,6 @@
 /** Presentation metadata for Alfred's statuses, phases, and notification types. */
 
-import type { LifecyclePhase, PlanningState, RunStatus, TaskStatus } from '@/api/types'
+import type { LifecyclePhase, PlanningState, RunStatus, TaskStatus, TaskType } from '@/api/types'
 
 export interface StatusMeta {
   label: string
@@ -18,6 +18,7 @@ export const TASK_STATUSES: TaskStatus[] = [
   'MR in Review',
   'Completed',
   'Consolidated',
+  'Cancelled',
 ]
 
 export const STATUS_META: Record<TaskStatus, StatusMeta> = {
@@ -30,6 +31,15 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   'MR in Review': { label: 'In review', lamp: 'var(--lamp-review)', description: 'Waiting for human review' },
   Completed: { label: 'Completed', lamp: 'var(--lamp-done)', description: 'Deployed or archived' },
   Consolidated: { label: 'Consolidated', lamp: 'var(--lamp-consolidated)', description: 'Absorbed into another task' },
+  Cancelled: { label: 'Cancelled', lamp: 'var(--lamp-off)', description: 'Abandoned and archived' },
+}
+
+export const TASK_TYPES: TaskType[] = ['development', 'research', 'analysis']
+
+export const TASK_TYPE_META: Record<TaskType, { label: string; description: string }> = {
+  development: { label: 'Development', description: 'Changes code on a branch in isolated worktrees' },
+  research: { label: 'Research', description: 'Investigates and reports findings; no branch or commits' },
+  analysis: { label: 'Analysis', description: 'Analyzes and reports findings; no branch or commits' },
 }
 
 export const PHASES: LifecyclePhase[] = ['active', 'testing_deployment', 'archived', 'consolidated']
@@ -98,7 +108,7 @@ export function runLamp(status: string): string {
 }
 
 export function isTerminal(status: string, phase: string): boolean {
-  return status === 'Completed' || status === 'Consolidated' || phase === 'archived' || phase === 'consolidated'
+  return status === 'Completed' || status === 'Consolidated' || status === 'Cancelled' || phase === 'archived' || phase === 'consolidated'
 }
 
 /** Classify an event type into a coarse group used for colour and filtering. */

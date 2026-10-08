@@ -18,8 +18,8 @@ export type DropPlan =
   | { allowed: true; action: string; overrides: Values; label: string }
   | { allowed: false; reason: string }
 
-const OPTIONAL_STATUSES = new Set<TaskStatus>(['On Hold', 'Consolidated'])
-const FINISHED_STATUSES = new Set<TaskStatus>(['Completed', 'Consolidated'])
+const OPTIONAL_STATUSES = new Set<TaskStatus>(['On Hold', 'Consolidated', 'Cancelled'])
+const FINISHED_STATUSES = new Set<TaskStatus>(['Completed', 'Consolidated', 'Cancelled'])
 
 const PRIORITY_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 }
 
@@ -149,6 +149,8 @@ export function dropPlan(task: Task, grouping: Grouping, column: string): DropPl
       return deny(actions.merge.enabled ? 'Record the merge first (drag in the lifecycle view or use Merge)' : actions.deploy.reason)
     case 'Consolidated':
       return actions.consolidate.enabled ? allow('consolidate', 'Consolidate') : deny(actions.consolidate.reason)
+    case 'Cancelled':
+      return actions.cancel.enabled ? allow('cancel', 'Cancel the task') : deny(actions.cancel.reason)
     case 'Queued':
       return task.status === 'Pending' && actions.assign.enabled
         ? allow('assign', 'Queue for trigger all', { dispatch: 'queued', agent: task.assigned_agent_alias })

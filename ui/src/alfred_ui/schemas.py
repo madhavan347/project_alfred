@@ -16,6 +16,8 @@ EventType = Literal[
     "fixing",
 ]
 CompletionResult = Literal["success", "failed", "blocked"]
+TaskTypeName = Literal["development", "research", "analysis"]
+SkillPhase = Literal["plan", "execution"]
 
 
 class ActorBody(BaseModel):
@@ -31,6 +33,8 @@ class TaskCreateBody(ActorBody):
     title: str
     description: str
     category: str = "General"
+    type: TaskTypeName = "development"
+    model: str = ""
     priority: str = "P2"
     deadline: str = ""
     notes: str = ""
@@ -49,6 +53,8 @@ class TaskUpdateBody(ActorBody):
     title: str | None = None
     description: str | None = None
     category: str | None = None
+    type: TaskTypeName | None = None
+    model: str | None = None
     priority: str | None = None
     deadline: str | None = None
     notes: str | None = None
@@ -97,18 +103,28 @@ class DeployBody(ActorBody):
     result: str = "passed"
 
 
+class CancelBody(ActorBody):
+    """``alfred task cancel``; removing worktrees is opt-in and dirty trees need ``force``."""
+
+    reason: str
+    cleanup: bool = False
+    force: bool = False
+
+
 class AssignBody(ActorBody):
-    """``alfred agent assign``."""
+    """``alfred agent assign``; no model keeps the task's current one."""
 
     agent: str
     dispatch: Literal["auto", "queued"] | None = None
+    model: str | None = None
 
 
 class ReassignBody(ActorBody):
-    """``alfred agent reassign``."""
+    """``alfred agent reassign``; no model keeps the task's current one."""
 
     agent: str
     mode: Literal["soft-switch", "stop-and-switch"] = "soft-switch"
+    model: str | None = None
 
 
 class TriggerBody(ActorBody):
@@ -199,6 +215,12 @@ class LearnerStartBody(BaseModel):
     """``alfred learner start``."""
 
     agent: str = ""
+
+
+class SkillBody(BaseModel):
+    """``alfred skill set``: the full replacement text of one phase's skill."""
+
+    content: str
 
 
 class NotificationAckBody(BaseModel):

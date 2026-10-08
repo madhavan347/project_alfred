@@ -20,7 +20,12 @@ from a shell or by an agent appear in the browser within a second, without reloa
   why. The "Needs you" strip lists plans waiting for approval, reviews, failed and blocked runs,
   dead sessions, and completion reports waiting for the coordinator.
 - **Task**: click a card to open the task in a drawer, or open it as a full page. It shows the
-  next step and where the task is in its lifecycle, and it has these tabs:
+  next step and where the task is in its lifecycle. **Cancel task** abandons it at any stage
+  (`alfred task cancel`), stopping a live run and optionally removing its worktrees. Creating or
+  editing a task sets its type (development, or research and analysis, which run without a branch)
+  and its model; editing the branch also renames it in existing worktrees. Assign and reassign can
+  choose a model too, and a reassigned agent receives a handoff from the previous session. The task
+  has these tabs:
   - **Overview**: description, latest note, details, and a live preview of the agent's screen.
   - **Plan**: for plan-first tasks, the plan the agent reported. Approve it (`alfred run continue`)
     or request changes.
@@ -42,7 +47,8 @@ from a shell or by an agent appear in the browser within a second, without reloa
   state files.
 - **Settings**: open or initialize a workspace, edit `config.toml` (validated by Alfred before it
   is saved), add agents from presets (Claude Code, Codex CLI, Antigravity), run health checks,
-  migrate legacy runtime state, and set the actor your actions are recorded as.
+  edit the plan and execution skills appended to agent prompts (`alfred skill`), migrate legacy
+  runtime state, and set the actor your actions are recorded as.
 
 Press <kbd>⌘K</kbd> anywhere to jump to a task or an action.
 
@@ -83,6 +89,16 @@ page where you can paste the token.
 
 Press Ctrl-C to stop the server. Agents and the background coordinator keep running in tmux, and
 the UI picks them up again when you restart it.
+
+### Updating a running server
+
+**Settings → Server** shows which checkout the server runs, its Git branch and commit, and when the
+server and the frontend build started. It warns when the Python code or the frontend sources on disk
+are newer than what is running. **Update and restart** rebuilds the frontend (`npm run build` with
+the installed `node_modules`) and restarts the server in place on the same port, workspace, and
+token, so open browsers reconnect without signing in again. Agent sessions and the coordinator run
+in tmux and keep running. The update never downloads anything: pull or switch branches yourself
+first, and run `npm ci` or `pip install` yourself when dependencies change.
 
 Without `--config`, the workspace is found the way `alfred` finds it: `$ALFRED_CONFIG`, then the
 nearest `.alfred/config.toml` above the current directory. If none is found, the UI opens anyway

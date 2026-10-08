@@ -1,6 +1,6 @@
 /**
  * Recovery paths: a failed attempt reopened, a session that dies, a dispatch queued while tmux was
- * missing, and a stop that must not silently discard uncommitted work.
+ * missing, a stop that must not silently discard uncommitted work, and a task cancelled mid-run.
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -100,4 +100,33 @@ test('stopping with cleanup refuses to discard uncommitted work unless forced', 
   await expect(panel.locator('.facts')).toContainText('Pending')
   expect(existsSync(worktree)).toBe(false)
   expect(runs(34).at(-1)?.run_status).toBe('stopped')
+})
+
+test('a running task is cancelled from the UI and moves to the Cancelled column', async ({ page }) => {
+  await createTask({ task: 35, title: 'Abandoned idea', description: 'Waits for go. [fake:wait]', branch: 'feature/abandon-35' })
+  await signIn(page)
+  const panel = await openTask(page, 35)
+  await submit(await openAction(page, panel, 'trigger'))
+  await expect(panel.locator('.facts')).toContainText('In progress', { timeout: 30_000 })
+
+  const cancel = await openAction(page, panel, 'cancel')
+  await cancel.getByLabel('Reason').fill('No longer needed')
+  await cancel.getByText('Also remove the task’s worktrees').click()
+  await expect(cancel.locator('.command')).toContainText("alfred task cancel --task 35 --reason 'No longer needed' --cleanup yes")
+  // The agent left an uncommitted file, so cleanup without force refuses before anything changes.
+  await cancel.getByTestId('action-submit').click()
+  await expect(cancel.getByRole('alert')).toContainText('uncommitted changes: app')
+  expect(task(35).status).toBe('In Progress')
+  await cancel.getByText('Discard uncommitted changes (force)').click()
+  await expect(cancel.locator('.command')).toContainText('--cleanup yes --force')
+  await submit(cancel)
+  await expect(panel.locator('.facts')).toContainText('Cancelled')
+  expect(task(35).status).toBe('Cancelled')
+  expect(task(35).lifecycle_phase).toBe('archived')
+  expect(runs(35).at(-1)?.run_status).toBe('stopped')
+  expect(existsSync(join(env.workspace, '.alfred', 'worktrees', 'task-35'))).toBe(false)
+
+  await page.goto(`${env.base}/`)
+  await expect(page.locator('.shell')).toBeVisible()
+  await expect(page.locator('[data-column="Cancelled"] [data-task="35"]')).toBeVisible()
 })

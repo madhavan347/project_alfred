@@ -5,7 +5,7 @@ import { BellRing, CircleCheck, CircleSlash, MonitorPlay } from 'lucide-vue-next
 import { api } from '@/api/http'
 import type { TaskDetail } from '@/api/types'
 import { absolute, duration, humanize } from '@/lib/format'
-import { NOTIFICATION_META, PHASE_META, PLANNING_LABELS, RUN_META, runLamp, statusLamp } from '@/lib/status'
+import { NOTIFICATION_META, PHASE_META, PLANNING_LABELS, RUN_META, TASK_TYPE_META, runLamp, statusLamp } from '@/lib/status'
 import { useRequest } from '@/composables/useRequest'
 import { useDialogs } from '@/stores/dialogs'
 import { useLive } from '@/stores/live'
@@ -34,6 +34,8 @@ const required = computed(() => live.config?.knowledge.required_completion_entri
 const pendingNotifications = computed(() => props.detail.notifications.filter((item) => !item.acknowledged))
 
 const details = computed(() => [
+  { label: 'Type', value: TASK_TYPE_META[task.value.task_type].label },
+  { label: 'Model', value: task.value.model || 'Agent default', mono: !!task.value.model },
   { label: 'Category', value: task.value.category },
   { label: 'Priority', value: task.value.priority },
   { label: 'Deadline', value: task.value.deadline },

@@ -14,7 +14,7 @@ const denied = (reason: string) => ({ enabled: false, reason })
 function makeTask(overrides: Partial<Task> = {}, actions: Partial<TaskDerived['actions']> = {}): Task {
   const names = [
     'trigger', 'continue', 'stop', 'reopen', 'event', 'complete', 'progress', 'start', 'block', 'unblock', 'hold',
-    'review', 'merge', 'deploy', 'archive', 'consolidate', 'assign', 'reassign', 'update', 'worktree_create',
+    'review', 'merge', 'deploy', 'archive', 'cancel', 'consolidate', 'assign', 'reassign', 'update', 'worktree_create',
     'commit', 'push', 'remove_worktrees',
   ] as const
   const base = Object.fromEntries(names.map((name) => [name, denied(`${name} is not possible`)]))
@@ -23,6 +23,8 @@ function makeTask(overrides: Partial<Task> = {}, actions: Partial<TaskDerived['a
     title: 'Seven',
     description: 'Do it',
     category: 'General',
+    task_type: 'development',
+    model: '',
     priority: 'P2',
     status: 'Pending',
     deadline: '',
@@ -157,6 +159,15 @@ describe('board', () => {
     expect(dropPlan(pending, 'agent', 'other')).toEqual({ allowed: false, reason: 'reassign is not possible' })
     expect(dropPlan(pending, 'agent', '')).toMatchObject({ allowed: false })
     expect(dropPlan(pending, 'phase', 'archived')).toEqual({ allowed: false, reason: 'archive is not possible' })
+    expect(dropPlan(makeTask({}, { cancel: allowed }), 'status', 'Cancelled')).toMatchObject({ allowed: true, action: 'cancel' })
+  })
+
+  it('treats cancelled tasks as finished', () => {
+    const tasks = [makeTask(), makeTask({ task_number: 9, status: 'Cancelled', lifecycle_phase: 'archived' })]
+    const hidden = columnsFor(tasks, 'status', [], { showFinished: false, dragging: false })
+    expect(hidden.map((column) => column.key)).not.toContain('Cancelled')
+    const shown = columnsFor(tasks, 'status', [], { showFinished: true, dragging: false })
+    expect(shown.find((column) => column.key === 'Cancelled')?.tasks.map((task) => task.task_number)).toEqual([9])
   })
 
   it('builds columns, hiding optional empty ones unless dragging', () => {
@@ -196,6 +207,41 @@ describe('actions', () => {
     review.derived.approved_since_last_work = true
     expect(nextStep(review).action).toBe('merge')
     expect(nextStep(makeTask({ status: 'Completed', lifecycle_phase: 'archived' })).label).toBe('Finished')
+    expect(nextStep(makeTask({ status: 'Cancelled', lifecycle_phase: 'archived', assigned_agent_alias: '' }))).toEqual({
+      action: null,
+      label: 'Cancelled',
+    })
+  })
+
+  it('cancels with optional cleanup', () => {
+    const task = makeTask()
+    const cancel = ACTIONS.cancel
+    const plain = initialValues(cancel, context(task), { reason: 'Not needed' })
+    expect(cancel.command(plain, context(task))).toBe("alfred task cancel --task 7 --reason 'Not needed'")
+    const forced = { ...plain, cleanup: true, force: true }
+    expect(cancel.command(forced, context(task))).toBe("alfred task cancel --task 7 --reason 'Not needed' --cleanup yes --force")
+    expect(cancel.request({ ...plain, force: true }, context(task)).body).toMatchObject({ cleanup: false, force: false })
+  })
+
+  it('offers an agent’s models, or free text when it lists none', () => {
+    const task = makeTask({ model: 'small' })
+    const agent = (alias: string, models: string[]) => ({ alias, models }) as never
+    const withConfig: ActionContext = {
+      task,
+      config: { agents: [agent('fake', ['small', 'large']), agent('open', [])] } as never,
+      actor: 'manager',
+    }
+    const reassign = ACTIONS.reassign
+    const listed = initialValues(reassign, withConfig, { agent: 'fake', model: 'large' })
+    const modelField = reassign.fields.find((field) => field.key === 'model')!
+    expect(modelField.visible?.(listed, withConfig)).toBe(true)
+    expect(modelField.options?.(withConfig, listed).map((option) => option.value)).toEqual(['', 'small', 'large'])
+    expect(reassign.request(listed, withConfig).body).toMatchObject({ agent: 'fake', model: 'large' })
+    expect(reassign.command(listed, withConfig)).toBe('alfred agent reassign --task 7 --to fake --model large')
+    const free = { ...listed, agent: 'open', model_text: 'custom' }
+    expect(modelField.visible?.(free, withConfig)).toBe(false)
+    expect(reassign.request(free, withConfig).body).toMatchObject({ agent: 'open', model: 'custom' })
+    expect(ACTIONS.assign.request({ ...free, model_text: '' }, withConfig).body).toMatchObject({ model: null })
   })
 
   it('renders the exact CLI equivalent for an action', () => {

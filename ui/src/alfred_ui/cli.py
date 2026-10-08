@@ -19,6 +19,7 @@ import alfred_ui
 from alfred_ui.app import DEFAULT_STATIC, create_app
 from alfred_ui.doctor import alfred_directory
 from alfred_ui.security import TokenPolicy
+from alfred_ui.updater import Updater
 from alfred_ui.workspace import WorkspaceContext
 
 DEFAULT_PORT = 8765
@@ -91,12 +92,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"ERROR: cannot listen on {args.host}: {exc.strerror or exc}", file=sys.stderr)
         return 1
     port = int(listener.getsockname()[1])
+    static_directory = args.static_dir or DEFAULT_STATIC
+    restart = RestartRequest()
     app = create_app(
         context,
         policy=TokenPolicy(token=token, cookie_name=f"alfred_ui_token_{port}"),
         allowed_hosts=tuple(args.allow_host),
         allowed_origins=tuple(args.allow_origin),
-        static_directory=args.static_dir or DEFAULT_STATIC,
+        static_directory=static_directory,
+        updater=Updater(static_directory=static_directory, restart=restart),
     )
     url = f"http://{_url_host(args.host)}:{port}/" + (f"?token={token}" if token else "")
     workspace = context.config_path or "no workspace yet (open or create one in Settings)"
@@ -105,12 +109,57 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.open:
         webbrowser.open(url)
     server = uvicorn.Server(
-        uvicorn.Config(app, log_level=args.log_level, access_log=False, lifespan="on")
+        uvicorn.Config(
+            app,
+            log_level=args.log_level,
+            access_log=False,
+            lifespan="on",
+            timeout_graceful_shutdown=5,
+        )
     )
+    restart.server = server
     # uvicorn re-raises Ctrl-C after shutting down gracefully; stopping is not an error.
     with contextlib.suppress(KeyboardInterrupt):
         server.run(sockets=[listener])
+    if restart.requested:
+        listener.close()
+        arguments = restart_arguments(
+            sys.argv[1:] if argv is None else argv, port=port, config=context.config_path
+        )
+        if token:
+            # Keep the same token so open browsers stay signed in, without putting it in argv.
+            os.environ["ALFRED_UI_TOKEN"] = token
+        print("Restarting Alfred UI", flush=True)
+        # -P keeps the working directory off sys.path, so the restarted server imports this
+        # installation rather than whatever happens to sit in the current directory.
+        os.execv(sys.executable, [sys.executable, "-P", "-m", "alfred_ui", *arguments])
     return 0
+
+
+class RestartRequest:
+    """Stop the running server gracefully so ``main`` can start it again in place."""
+
+    def __init__(self) -> None:
+        self.requested = False
+        self.server: uvicorn.Server | None = None
+
+    def __call__(self) -> None:
+        self.requested = True
+        if self.server is not None:
+            self.server.should_exit = True
+
+
+def restart_arguments(argv: Sequence[str], *, port: int, config: Path | None) -> list[str]:
+    """Return the arguments that start the same server again on the same port and workspace.
+
+    The browser is not opened again, and later options win in argparse, so the actual port and the
+    workspace open right now replace whatever the original command line said.
+    """
+    arguments = [item for item in argv if item != "--open"]
+    arguments += ["--port", str(port)]
+    if config is not None:
+        arguments += ["--config", str(config)]
+    return arguments
 
 
 def bind(host: str, port: int | None) -> socket.socket:

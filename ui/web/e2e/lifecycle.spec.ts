@@ -105,3 +105,25 @@ test('a direct task goes from creation to archive through the UI', async ({ page
   await expect(page.locator('[data-call="review"]')).toHaveCount(0)
   expect(alfred(['notifications']).output).toContain('No pending notifications')
 })
+
+test('a research task is created without a branch and with its own model', async ({ page }) => {
+  await signIn(page)
+  await page.locator('.topbar').getByRole('button', { name: 'New task' }).click()
+  const form = page.locator('dialog.modal.dialog[open]')
+  await form.locator('#task-number').fill('12')
+  await form.locator('#task-title').fill('Survey the logging options')
+  await form.locator('#task-description').fill('Compare the options and report back.')
+  await form.getByRole('radio', { name: 'Research' }).click()
+  await expect(form.locator('#task-branch')).toHaveCount(0)
+  await expect(form).toContainText('run in the workspace root without a branch')
+  await form.locator('#task-model').fill('deep-thinker')
+  await expect(form.locator('.command')).toContainText('--type research --model deep-thinker')
+  await form.getByTestId('task-form-submit').click()
+
+  const panel = page.locator('[data-task-panel="12"]')
+  await expect(panel).toBeVisible()
+  await expect(panel).toContainText('Research')
+  await expect(panel).toContainText('deep-thinker')
+  const stored = task(12) as unknown as Record<string, unknown>
+  expect(stored).toMatchObject({ task_type: 'research', model: 'deep-thinker', branch_name: '', worktree_mode: 'disabled' })
+})

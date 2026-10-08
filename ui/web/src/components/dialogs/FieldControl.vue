@@ -12,7 +12,7 @@ import CheckList from '@/components/base/CheckList.vue'
 /** Render one catalog field with the matching control. */
 const props = defineProps<{ field: FieldSpec; values: Values; context: ActionContext; invalid?: boolean }>()
 const id = useId()
-const options = computed(() => props.field.options?.(props.context) ?? [])
+const options = computed(() => props.field.options?.(props.context, props.values) ?? [])
 
 const text = computed({
   get: () => String(props.values[props.field.key] ?? ''),

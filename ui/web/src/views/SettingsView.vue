@@ -1,9 +1,34 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { FolderOpen, FolderPlus, HeartPulse, RefreshCw, Save, SlidersHorizontal, Undo2, Upload, Wrench } from 'lucide-vue-next'
+import {
+  FolderOpen,
+  FolderPlus,
+  Hammer,
+  HeartPulse,
+  NotebookPen,
+  RefreshCw,
+  RotateCw,
+  Save,
+  Server,
+  SlidersHorizontal,
+  Trash2,
+  Undo2,
+  Upload,
+  Wrench,
+} from 'lucide-vue-next'
 import { api } from '@/api/http'
-import type { ActionResult, ConfigPayload, ConfigValidation, DoctorCheck } from '@/api/types'
+import type {
+  ActionResult,
+  ConfigPayload,
+  ConfigValidation,
+  DoctorCheck,
+  RebuildResult,
+  ServerStatus,
+  SkillEntry,
+  SkillListing,
+} from '@/api/types'
+import { absolute } from '@/lib/format'
 import { alfredCommand, shellJoin, shellQuote } from '@/lib/cli'
 import { splitCommand } from '@/lib/shellwords'
 import { errorMessage, useRequest } from '@/composables/useRequest'
@@ -19,6 +44,7 @@ import SegmentedControl from '@/components/base/SegmentedControl.vue'
 import SelectInput from '@/components/base/SelectInput.vue'
 import TabBar from '@/components/base/TabBar.vue'
 import TagChip from '@/components/base/TagChip.vue'
+import TextArea from '@/components/base/TextArea.vue'
 import TextInput from '@/components/base/TextInput.vue'
 import ToggleSwitch from '@/components/base/ToggleSwitch.vue'
 import CodeEditor from '@/components/misc/CodeEditor.vue'
@@ -32,7 +58,9 @@ const router = useRouter()
 const sections = [
   { key: 'workspace', label: 'Workspace', icon: FolderOpen },
   { key: 'configuration', label: 'Configuration', icon: Wrench },
+  { key: 'skills', label: 'Skills', icon: NotebookPen },
   { key: 'health', label: 'Health checks', icon: HeartPulse },
+  { key: 'server', label: 'Server', icon: Server },
   { key: 'migrate', label: 'Legacy migration', icon: Upload },
   { key: 'preferences', label: 'Preferences', icon: SlidersHorizontal },
 ]
@@ -204,6 +232,129 @@ async function addAgent() {
   } catch (error) {
     agentError.value = errorMessage(error)
   }
+}
+
+// Skills ------------------------------------------------------------------------------
+const SKILL_LABELS: Record<SkillEntry['phase'], { title: string; help: string }> = {
+  plan: { title: 'Plan skill', help: 'Appended to planning prompts of plan-execution tasks.' },
+  execution: { title: 'Execution skill', help: 'Appended to execution prompts, including direct tasks.' },
+}
+const skills = ref<SkillListing | null>(null)
+const skillText = reactive<Record<SkillEntry['phase'], string>>({ plan: '', execution: '' })
+const skillsFailure = ref('')
+const skillSaving = useRequest()
+
+async function loadSkills() {
+  if (!live.snapshot?.workspace.config_path) return
+  try {
+    skills.value = await api.get<SkillListing>('/skills')
+    for (const item of skills.value.skills) skillText[item.phase] = item.content
+    skillsFailure.value = ''
+  } catch (error) {
+    skillsFailure.value = errorMessage(error)
+  }
+}
+
+// Also wait for the first snapshot: opening #skills directly runs this before the workspace is known.
+watch(
+  () => [section.value, live.snapshot?.workspace.config_path] as const,
+  ([value]) => {
+    if (value === 'skills') void loadSkills()
+  },
+  { immediate: true },
+)
+
+function skillDirty(item: SkillEntry): boolean {
+  return skillText[item.phase].trim() !== item.content
+}
+
+async function saveSkill(item: SkillEntry) {
+  const result = await skillSaving.run(() => api.put<ActionResult>(`/skills/${item.phase}`, { content: skillText[item.phase] }), {
+    command: alfredCommand('skill', 'set', ['--phase', item.phase], ['--file', item.path]),
+  })
+  if (result) void loadSkills()
+}
+
+async function removeSkill(item: SkillEntry) {
+  const result = await skillSaving.run(() => api.post<ActionResult>(`/skills/${item.phase}/remove`), {
+    command: alfredCommand('skill', 'remove', ['--phase', item.phase]),
+  })
+  if (result) void loadSkills()
+}
+
+// Server ------------------------------------------------------------------------------
+const server = ref<ServerStatus | null>(null)
+const serverFailure = ref('')
+const rebuildResult = ref<RebuildResult | null>(null)
+const serverBusy = ref<'' | 'rebuild' | 'restart'>('')
+const restartProblem = ref('')
+
+async function loadServer() {
+  try {
+    server.value = await api.get<ServerStatus>('/server')
+    serverFailure.value = ''
+  } catch (error) {
+    serverFailure.value = errorMessage(error)
+  }
+}
+
+watch(section, (value) => {
+  if (value === 'server') void loadServer()
+}, { immediate: true })
+
+/** Rebuild the frontend from this checkout; the result, including a failure, is shown inline. */
+async function rebuild(): Promise<boolean> {
+  serverBusy.value = 'rebuild'
+  rebuildResult.value = null
+  try {
+    rebuildResult.value = await api.post<RebuildResult>('/server/rebuild')
+    if (!rebuildResult.value.ok) toasts.push({ tone: 'error', title: rebuildResult.value.message })
+    return rebuildResult.value.ok
+  } catch (error) {
+    toasts.push({ tone: 'error', title: 'Rebuild failed', detail: errorMessage(error) })
+    return false
+  } finally {
+    serverBusy.value = ''
+    void loadServer()
+  }
+}
+
+/** Restart the server, wait until a new process answers, then reload the page to use it. */
+async function restart() {
+  const before = server.value?.started_at
+  serverBusy.value = 'restart'
+  restartProblem.value = ''
+  try {
+    await api.post<ActionResult>('/server/restart')
+  } catch (error) {
+    restartProblem.value = errorMessage(error)
+    serverBusy.value = ''
+    return
+  }
+  const deadline = Date.now() + 60_000
+  while (Date.now() < deadline) {
+    await new Promise((done) => window.setTimeout(done, 1000))
+    try {
+      const current = await api.get<ServerStatus>('/server')
+      if (current.started_at !== before) {
+        window.location.reload()
+        return
+      }
+    } catch {
+      /* The server is down while it restarts. */
+    }
+  }
+  serverBusy.value = ''
+  restartProblem.value = 'The server did not come back within a minute. Check the terminal it runs in.'
+}
+
+function reloadPage() {
+  window.location.reload()
+}
+
+async function updateAndRestart() {
+  if (server.value?.rebuild.available && !(await rebuild())) return
+  await restart()
 }
 
 // Health ------------------------------------------------------------------------------
@@ -383,9 +534,9 @@ async function migrate() {
               <FormField label="Execution command" for-id="agent-execution"><TextInput id="agent-execution" v-model="agent.execution" mono /></FormField>
               <FormField label="Learner (direct) command" for-id="agent-direct"><TextInput id="agent-direct" v-model="agent.direct" mono /></FormField>
               <p class="faint small">
-                Placeholders: {task_number} {task_title} {task_branch} {phase} {workdir} {prompt} {prompt_file}. Passing
-                {prompt} or {prompt_file} delivers the prompt reliably; otherwise it is pasted after the CLI starts.
-                Add --model to pin a model.
+                Placeholders: {task_number} {task_title} {task_branch} {phase} {workdir} {model} {prompt} {prompt_file}.
+                Passing {prompt} or {prompt_file} delivers the prompt reliably; otherwise it is pasted after the CLI starts.
+                Add --model to pin a model, or --model {model} with models and default_model to choose one per task.
               </p>
               <p v-if="agentError" class="failure small">{{ agentError }}</p>
               <AppButton type="submit" size="sm">Insert into the configuration</AppButton>
@@ -424,6 +575,52 @@ async function migrate() {
       </template>
     </div>
 
+    <div v-else-if="section === 'skills'" class="stack">
+      <p v-if="!live.snapshot?.workspace.config_path" class="muted">Open or create a workspace first.</p>
+      <p v-else-if="skillsFailure" class="failure">{{ skillsFailure }}</p>
+      <template v-else-if="skills">
+        <p class="muted small">
+          Skills are standing instructions Alfred appends to every agent prompt of a phase. They are stored as Markdown in
+          <span class="mono">{{ skills.directory }}</span>; removing one falls back to the built-in instructions.
+        </p>
+        <p v-if="skillSaving.error.value" class="failure">{{ skillSaving.error.value }}</p>
+        <div class="grid">
+          <section v-for="item in skills.skills" :key="item.phase" class="panel" :data-skill="item.phase">
+            <header class="panel-header wrap">
+              <h3>{{ SKILL_LABELS[item.phase].title }}</h3>
+              <span class="spacer" />
+              <TagChip :tone="item.exists ? 'ok' : 'default'">{{ item.exists ? 'Defined' : 'Built-in only' }}</TagChip>
+              <TagChip v-if="skillDirty(item)" tone="brass">Unsaved</TagChip>
+            </header>
+            <form class="panel-body stack" @submit.prevent="saveSkill(item)">
+              <FormField :label="SKILL_LABELS[item.phase].title" :for-id="`skill-${item.phase}`" :help="SKILL_LABELS[item.phase].help">
+                <TextArea :id="`skill-${item.phase}`" v-model="skillText[item.phase]" :rows="12" mono placeholder="Markdown instructions for the agent" />
+              </FormField>
+              <p class="faint tiny mono">{{ item.path }}</p>
+              <CommandLine :command="alfredCommand('skill', 'set', ['--phase', item.phase], ['--file', item.path])" />
+              <div class="row">
+                <AppButton
+                  type="submit"
+                  size="sm"
+                  tone="primary"
+                  :icon="Save"
+                  :loading="skillSaving.pending.value"
+                  :disabled="!skillDirty(item) || !skillText[item.phase].trim()"
+                  :data-testid="`save-skill-${item.phase}`"
+                >
+                  Save
+                </AppButton>
+                <AppButton size="sm" tone="quiet" :icon="Undo2" :disabled="!skillDirty(item)" @click="skillText[item.phase] = item.content">Revert</AppButton>
+                <AppButton size="sm" tone="danger" :icon="Trash2" :disabled="!item.exists" :loading="skillSaving.pending.value" @click="removeSkill(item)">
+                  Remove
+                </AppButton>
+              </div>
+            </form>
+          </section>
+        </div>
+      </template>
+    </div>
+
     <div v-else-if="section === 'health'" class="stack">
       <div class="row">
         <AppButton :icon="RefreshCw" :loading="checking" @click="runChecks">Run the checks again</AppButton>
@@ -438,6 +635,94 @@ async function migrate() {
           <AppButton v-if="check.fix" size="sm" tone="primary" :loading="fixing.pending.value" @click="fix(check)">{{ check.fix.label }}</AppButton>
         </li>
       </ul>
+    </div>
+
+    <div v-else-if="section === 'server'" class="stack">
+      <p v-if="serverFailure" class="failure">{{ serverFailure }}</p>
+      <template v-else-if="server">
+        <p v-if="server.frontend.stale || server.backend.stale" class="notice" role="status">
+          <template v-if="server.backend.stale">The server code changed after this server started. </template>
+          <template v-if="server.frontend.stale">The frontend sources are newer than the build being served. </template>
+          Update and restart to run what is on disk.
+        </p>
+        <div class="grid">
+          <section class="panel">
+            <header class="panel-header"><h3>Running server</h3></header>
+            <div class="panel-body stack">
+              <KeyValue
+                :items="[
+                  { label: 'Checkout', value: server.checkout, mono: true },
+                  {
+                    label: 'Git',
+                    value: server.git.available
+                      ? `${server.git.branch || '(detached)'} at ${server.git.commit}${server.git.changes ? `, ${server.git.changes} uncommitted` : ''}`
+                      : 'Not a Git checkout',
+                    mono: true,
+                  },
+                  { label: 'Last commit', value: server.git.subject || '—' },
+                  { label: 'Versions', value: `alfred ${server.versions.alfred}, alfred-ui ${server.versions.ui}` },
+                  { label: 'Alfred package', value: server.packages.alfred, mono: true },
+                  { label: 'UI package', value: server.packages.alfred_ui, mono: true },
+                  { label: 'Started', value: absolute(server.started_at) },
+                  { label: 'Python last changed', value: server.backend.changed_at ? absolute(server.backend.changed_at) : '—' },
+                  { label: 'Frontend built', value: server.frontend.built_at ? absolute(server.frontend.built_at) : 'Not built' },
+                  { label: 'Frontend sources changed', value: server.frontend.sources_changed_at ? absolute(server.frontend.sources_changed_at) : '—' },
+                ]"
+              />
+              <p class="faint small">
+                Check the checkout path: it is the copy of the project this server runs, whatever directory you started
+                it from.
+              </p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-header wrap">
+              <h3>Update</h3>
+              <span class="spacer" />
+              <TagChip v-if="server.frontend.stale" tone="brass">Frontend out of date</TagChip>
+              <TagChip v-if="server.backend.stale" tone="brass">Restart needed</TagChip>
+              <TagChip v-if="!server.frontend.stale && !server.backend.stale" tone="ok">Up to date</TagChip>
+            </header>
+            <div class="panel-body stack">
+              <p class="muted small">
+                Rebuilds the frontend from this checkout with the installed node_modules and restarts the server on the same
+                port and token. Nothing is downloaded: pull or switch branches yourself first. Agent sessions and the
+                coordinator run in tmux and keep running during the restart.
+              </p>
+              <CommandLine command="cd ui/web && npm run build" />
+              <p v-if="!server.rebuild.available" class="faint small">Rebuild unavailable: {{ server.rebuild.reason }}</p>
+              <p v-if="!server.restart.available" class="faint small">Restart unavailable: {{ server.restart.reason }}</p>
+              <div class="row">
+                <AppButton
+                  tone="primary"
+                  :icon="RotateCw"
+                  :loading="serverBusy !== ''"
+                  :disabled="!server.restart.available || serverBusy !== ''"
+                  data-testid="update-and-restart"
+                  @click="updateAndRestart"
+                >
+                  {{ serverBusy === 'rebuild' ? 'Rebuilding…' : serverBusy === 'restart' ? 'Restarting…' : 'Update and restart' }}
+                </AppButton>
+                <AppButton :icon="Hammer" :disabled="!server.rebuild.available || serverBusy !== ''" data-testid="rebuild" @click="rebuild">
+                  Rebuild frontend only
+                </AppButton>
+                <AppButton tone="quiet" :icon="RefreshCw" :disabled="!server.restart.available || serverBusy !== ''" @click="restart">
+                  Restart only
+                </AppButton>
+              </div>
+              <p v-if="restartProblem" class="failure">{{ restartProblem }}</p>
+              <template v-if="rebuildResult">
+                <p :class="rebuildResult.ok ? 'small' : 'failure'">
+                  {{ rebuildResult.message }} ({{ rebuildResult.seconds }}s)
+                  <button v-if="rebuildResult.ok" type="button" class="link" @click="reloadPage">Reload this page</button>
+                </p>
+                <pre class="fragment output" data-testid="rebuild-output">{{ rebuildResult.output }}</pre>
+              </template>
+            </div>
+          </section>
+        </div>
+      </template>
     </div>
 
     <div v-else-if="section === 'migrate'" class="grid">
@@ -637,6 +922,20 @@ async function migrate() {
 .failure {
   color: var(--danger);
   margin: 0;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--brass-soft);
+  color: var(--brass);
+  font-size: var(--text-sm);
+}
+
+.output {
+  max-height: 320px;
+  overflow: auto;
 }
 
 @media (max-width: 1100px) {

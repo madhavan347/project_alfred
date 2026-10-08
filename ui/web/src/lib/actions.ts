@@ -34,7 +34,7 @@ export interface FieldSpec {
   help?: string
   rows?: number
   mono?: boolean
-  options?: (context: ActionContext) => FieldOption[]
+  options?: (context: ActionContext, values: Values) => FieldOption[]
   initial?: (context: ActionContext) => unknown
   visible?: (values: Values, context: ActionContext) => boolean
 }
@@ -80,6 +80,43 @@ const agentOptions = (context: ActionContext): FieldOption[] =>
     label: agent.alias,
     hint: [agent.cli, agent.model ? `model ${agent.model}` : '', agent.runtime_target].filter(Boolean).join(', '),
   }))
+
+/** The models the chosen agent lists, or none when it accepts any model. */
+const agentModels = (values: Values, context: ActionContext): string[] =>
+  context.config?.agents.find((agent) => agent.alias === text(values, 'agent'))?.models ?? []
+
+/**
+ * The model for assign and reassign: a list when the agent configures models, free text otherwise.
+ * Leaving it empty keeps the task's current model.
+ */
+const modelFields: FieldSpec[] = [
+  {
+    key: 'model',
+    label: 'Model',
+    kind: 'select',
+    options: (context, values) => [
+      { value: '', label: `Keep current (${context.task?.model || 'agent default'})` },
+      ...agentModels(values, context).map((model) => ({ value: model, label: model })),
+    ],
+    initial: () => '',
+    visible: (values, context) => agentModels(values, context).length > 0,
+    help: 'Fills the {model} placeholder in the agent’s commands.',
+  },
+  {
+    key: 'model_text',
+    label: 'Model',
+    kind: 'text',
+    mono: true,
+    placeholder: 'Keep the current model',
+    initial: () => '',
+    visible: (values, context) => agentModels(values, context).length === 0,
+    help: 'Fills the {model} placeholder in the agent’s commands; empty keeps the current model.',
+  },
+]
+
+function chosenModel(values: Values, context: ActionContext): string {
+  return agentModels(values, context).length ? text(values, 'model') : text(values, 'model_text')
+}
 
 const repositoryOptions = (context: ActionContext): FieldOption[] =>
   (context.config?.repositories ?? []).map((repository) => ({
@@ -308,6 +345,52 @@ export const ACTIONS: Record<string, ActionSpec> = {
     command: (values, context) =>
       alfredCommand('task', 'consolidate', ['--task', number(context)], ['--note', text(values, 'note')], actorFlag(values)),
   },
+  cancel: {
+    id: 'cancel',
+    gate: 'cancel',
+    title: () => 'Cancel task',
+    submit: 'Cancel task',
+    tone: 'danger',
+    description: () =>
+      'Abandons the task at any stage and archives it. A live run is stopped first and the UI saves its transcript. Cancellation is final.',
+    fields: [
+      { key: 'reason', label: 'Reason', kind: 'textarea', required: true, rows: 2, placeholder: 'No longer needed' },
+      { key: 'cleanup', label: 'Also remove the task’s worktrees', kind: 'toggle', initial: () => false },
+      {
+        key: 'force',
+        label: 'Discard uncommitted changes (force)',
+        kind: 'toggle',
+        initial: () => false,
+        visible: (values) => flag(values, 'cleanup'),
+        help: 'Without force, dirty worktrees make the cancel fail before anything changes.',
+      },
+      actorField,
+    ],
+    request: (values, context) => ({
+      method: 'POST',
+      path: taskPath(context, '/cancel'),
+      body: {
+        reason: text(values, 'reason'),
+        cleanup: flag(values, 'cleanup'),
+        force: flag(values, 'cleanup') && flag(values, 'force'),
+        actor: text(values, 'actor'),
+      },
+    }),
+    command: (values, context) =>
+      alfredCommand(
+        'task',
+        'cancel',
+        ['--task', number(context)],
+        ['--reason', text(values, 'reason') || '<reason>'],
+        flag(values, 'cleanup') ? ['--cleanup', 'yes'] : false,
+        flag(values, 'cleanup') && flag(values, 'force') ? '--force' : false,
+        actorFlag(values),
+      ),
+    warning: (values, context) =>
+      flag(values, 'cleanup') && flag(values, 'force') && context.task?.derived.dirty
+        ? 'Uncommitted changes in the worktrees will be lost.'
+        : null,
+  },
   assign: {
     id: 'assign',
     gate: 'assign',
@@ -333,12 +416,18 @@ export const ACTIONS: Record<string, ActionSpec> = {
         ],
         initial: () => '',
       },
+      ...modelFields,
       actorField,
     ],
     request: (values, context) => ({
       method: 'POST',
       path: taskPath(context, '/assign'),
-      body: { agent: text(values, 'agent'), dispatch: text(values, 'dispatch') || null, actor: text(values, 'actor') },
+      body: {
+        agent: text(values, 'agent'),
+        dispatch: text(values, 'dispatch') || null,
+        model: chosenModel(values, context) || null,
+        actor: text(values, 'actor'),
+      },
     }),
     command: (values, context) =>
       alfredCommand(
@@ -347,6 +436,7 @@ export const ACTIONS: Record<string, ActionSpec> = {
         ['--task', number(context)],
         ['--to', text(values, 'agent') || '<agent>'],
         ['--dispatch', text(values, 'dispatch')],
+        ['--model', chosenModel(values, context)],
         actorFlag(values),
       ),
   },
@@ -366,14 +456,20 @@ export const ACTIONS: Record<string, ActionSpec> = {
           { value: 'stop-and-switch', label: 'Stop it first' },
         ],
         initial: () => 'soft-switch',
-        help: 'A soft switch only changes the assignment. Stopping first ends the active run and resets the task to Pending.',
+        help: 'A soft switch only changes the assignment. Stopping first ends the active run and resets the task to Pending. Either way the new agent receives a handoff with the previous session’s context.',
       },
+      ...modelFields,
       actorField,
     ],
     request: (values, context) => ({
       method: 'POST',
       path: taskPath(context, '/reassign'),
-      body: { agent: text(values, 'agent'), mode: values.mode, actor: text(values, 'actor') },
+      body: {
+        agent: text(values, 'agent'),
+        mode: values.mode,
+        model: chosenModel(values, context) || null,
+        actor: text(values, 'actor'),
+      },
     }),
     command: (values, context) =>
       alfredCommand(
@@ -382,6 +478,7 @@ export const ACTIONS: Record<string, ActionSpec> = {
         ['--task', number(context)],
         ['--to', text(values, 'agent') || '<agent>'],
         ['--mode', values.mode === 'soft-switch' ? '' : String(values.mode)],
+        ['--model', chosenModel(values, context)],
         actorFlag(values),
       ),
   },
@@ -790,6 +887,7 @@ export function initialValues(spec: ActionSpec, context: ActionContext, override
 export function nextStep(task: Task): { action: string | null; label: string } {
   const actions = task.derived.actions
   const plan = task.derived.plan
+  if (task.status === 'Cancelled') return { action: null, label: 'Cancelled' }
   if (!task.assigned_agent_alias) return { action: 'assign', label: 'Assign an agent' }
   if (plan.awaiting_approval && plan.reported && actions.continue.enabled) return { action: 'continue', label: 'Review and approve the plan' }
   if (plan.awaiting_approval) return { action: null, label: 'Agent is planning' }

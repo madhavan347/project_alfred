@@ -228,3 +228,43 @@ def test_foreign_and_invalid_sessions_are_refused(client: TestClient) -> None:
     assert foreign.status_code == 403
     invalid = client.get("/api/sessions/bad name/capture")
     assert invalid.status_code in {400, 403}
+
+
+def test_cancel_stops_the_live_run_and_removes_worktrees(
+    client: TestClient, workspace: Path, prefix: str
+) -> None:
+    create(client, 9, description="Waits. [fake:wait]")
+    client.post("/api/runs/trigger", json={"tasks": [9]})
+    assert session_exists(f"{prefix}-9-fake")
+    root = workspace.parent / "worktrees" / "task-9"
+    assert root.exists()
+    cancelled = client.post(
+        "/api/tasks/9/cancel", json={"reason": "Superseded", "cleanup": True, "force": True}
+    )
+    assert cancelled.json()["message"] == "Task 9: Cancelled"
+    assert cancelled.json()["transcript"]["reason"] == "cancelled"
+    assert not session_exists(f"{prefix}-9-fake")
+    assert not root.exists()
+    assert runs(workspace, 9)[-1]["run_status"] == "stopped"
+    assert task(workspace, 9)["lifecycle_phase"] == "archived"
+
+
+def test_branch_edit_renames_the_worktree_branch(client: TestClient, workspace: Path) -> None:
+    create(client, 10)
+    client.post("/api/tasks/10/worktrees", json={"repos": []})
+    updated = client.patch(
+        "/api/tasks/10", json={"branch": "feature/renamed-10", "title": "Renamed"}
+    )
+    assert updated.status_code == 200, updated.text
+    record = task(workspace, 10)
+    assert (record["branch_name"], record["title"]) == ("feature/renamed-10", "Renamed")
+    worktree = workspace.parent / "worktrees" / "task-10" / "app"
+    current = subprocess.run(
+        ["git", "-C", str(worktree), "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert current.stdout.strip() == "feature/renamed-10"
+    invalid = client.patch("/api/tasks/10", json={"branch": "bad..name"})
+    assert invalid.status_code == 400
