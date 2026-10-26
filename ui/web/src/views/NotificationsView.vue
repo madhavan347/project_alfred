@@ -6,6 +6,7 @@ import { api } from '@/api/http'
 import type { Notification } from '@/api/types'
 import { humanize } from '@/lib/format'
 import { NOTIFICATION_META, statusLamp } from '@/lib/status'
+import { useAlertSwitch } from '@/composables/useDesktopAlerts'
 import { useRequest } from '@/composables/useRequest'
 import { useLive } from '@/stores/live'
 import { usePrefs } from '@/stores/prefs'
@@ -42,14 +43,7 @@ async function clear() {
   await run(() => api.post('/notifications/clear'), { command: 'alfred notifications clear' })
 }
 
-async function toggleBrowser(enabled: boolean) {
-  if (enabled && 'Notification' in window && window.Notification.permission !== 'granted') {
-    const result = await window.Notification.requestPermission()
-    prefs.values.browserNotifications = result === 'granted'
-    return
-  }
-  prefs.values.browserNotifications = enabled
-}
+const alerts = useAlertSwitch()
 
 function openTask(task: number) {
   void router.push({ path: route.path, query: { ...route.query, task: String(task) } })
@@ -70,9 +64,13 @@ function openTask(task: number) {
       <ToggleSwitch
         :model-value="prefs.values.browserNotifications"
         label="Desktop alerts"
-        help="Show a system notification when a new one arrives"
-        @update:model-value="toggleBrowser"
+        :help="alerts.help()"
+        @update:model-value="alerts.toggle"
       />
+      <AppButton v-if="prefs.values.browserNotifications && alerts.permission.value === 'granted'" size="sm" tone="quiet" @click="alerts.testLater()">
+        {{ alerts.countdown.value ? `Sending in ${alerts.countdown.value}s…` : 'Send a test' }}
+      </AppButton>
+      <RouterLink to="/settings#preferences" class="small">Alerts not showing?</RouterLink>
     </header>
 
     <WorkspaceProblem />
