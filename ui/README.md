@@ -90,6 +90,20 @@ page where you can paste the token.
 Press Ctrl-C to stop the server. Agents and the background coordinator keep running in tmux, and
 the UI picks them up again when you restart it.
 
+### Run at login in the background
+
+After installing the UI and creating this checkout's `.alfred/config.toml`, run from the repository
+root:
+
+```console
+ui/.venv/bin/python ui/scripts/install_launch_agent.py
+```
+
+This installs a macOS LaunchAgent, starts the UI at `http://127.0.0.1:8765/`, and restarts it if it
+exits. It binds only to localhost and runs with `--no-token`. To stop it, run
+`launchctl bootout gui/$(id -u)/com.shriram.alfred-ui`. Run the installer again after moving the
+checkout or its virtual environment. Logs are in `.alfred/ui-service/`.
+
 ### Updating a running server
 
 **Settings → Server** shows which checkout the server runs, its Git branch and commit, and when the
